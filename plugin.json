@@ -1,0 +1,11 @@
+{
+  "id": "prayerTimes",
+  "name": "Prayer Times",
+  "description": "Offline Islamic prayer times, with an Athan sound at prayer time and a Quran recitation browser/player",
+  "version": "1.4.0",
+  "author": "zeroaccess",
+  "icon": "mosque",
+  "component": "./PrayerWidget.qml",
+  "settings": "./PrayerSettings.qml",
+  "permissions": ["settings_read", "settings_write", "state_read", "state_write", "process"]
+}
