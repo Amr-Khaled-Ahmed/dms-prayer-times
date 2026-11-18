@@ -153,7 +153,7 @@ PluginComponent {
                             Asr:     t[3],
                             Maghrib: t[4],
                             Isha:    t[5],
-                            Imsak:   t[0],
+                            Imsak:   obj.imsak || t[6] || "",
                             Sunset:  t[4]
                         },
                         date: {
@@ -519,7 +519,7 @@ PluginComponent {
                 text: "·"
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.surfaceVariantText
-                leftPadding: 2; rightPadding: 2
+                leftPadding: Theme.spacingXXS; rightPadding: Theme.spacingXXS
                 anchors.verticalCenter: parent.verticalCenter
             }
 

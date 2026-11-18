@@ -134,6 +134,8 @@ def main():
     h_year, h_month, h_day = gregorian_to_hijri(date.year, date.month, date.day)
     hijri_str = f"{h_day} {HIJRI_MONTHS_AR[h_month]} {h_year}"
 
+    imsak = (times["fajr"] - timedelta(minutes=10)).strftime("%H:%M")
+
     data = {
         "times": [
             times["fajr"].strftime("%H:%M"),
@@ -142,7 +144,9 @@ def main():
             times["asr"].strftime("%H:%M"),
             times["maghrib"].strftime("%H:%M"),
             times["isha"].strftime("%H:%M"),
+            imsak,
         ],
+        "imsak": imsak,
         "hijri": hijri_str,
         "date": str(date),
     }

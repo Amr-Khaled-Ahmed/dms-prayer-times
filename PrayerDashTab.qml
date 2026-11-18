@@ -126,7 +126,7 @@ DashTabComponent {
                         timings: {
                             Fajr:    t[0], Sunrise: t[1], Dhuhr:   t[2],
                             Asr:     t[3], Maghrib: t[4], Isha:    t[5],
-                            Imsak:   t[0], Sunset:  t[4]
+                            Imsak:   obj.imsak || t[6] || "", Sunset:  t[4]
                         },
                         date: { readable: obj.date || "", hijri: obj.hijri || "" }
                     })
@@ -504,7 +504,7 @@ DashTabComponent {
                 x: Theme.spacingM
                 y: Theme.spacingM
                 width: parent.width - Theme.spacingM * 2
-                columns: width >= 480 ? 2 : 1
+                columns: width >= Theme.smallBreakpoint ? 2 : 1
                 columnSpacing: Theme.spacingS
                 rowSpacing: Theme.spacingXS
 

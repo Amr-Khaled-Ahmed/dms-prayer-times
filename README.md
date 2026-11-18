@@ -1,6 +1,6 @@
 # Prayer Times Enhanced Plugin for Dank Material Shell (DMS)
 
-[![DMS](https://img.shields.io/badge/DMS-%E2%89%A51.7.0-6750A4)](https://github.com/AvengeMedia/DankMaterialShell)
+[![DMS](https://img.shields.io/badge/DMS-%E2%89%A52.0.0-6750A4)](https://github.com/AvengeMedia/DankMaterialShell)
 [![Platform](https://img.shields.io/badge/platform-Wayland-4A90D9)](https://wayland.freedesktop.org/)
 [![Python](https://img.shields.io/badge/python-3-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Repository](https://img.shields.io/badge/GitHub-dms--prayer--times-181717?logo=github)](https://github.com/Amr-Khaled-Ahmed/dms-prayer-times)
@@ -39,7 +39,7 @@ Prayer times are calculated locally on your machine. Manual coordinates work wit
 ### Dankbar Widget
 
 - Current or next prayer name with a live countdown directly in the top bar.
-- Popout schedule covering Imsak, Fajr, Sunrise, Dhuhr, Asr, Maghrib, and Isha.
+- Popout schedule covering Imsak (10 minutes before Fajr), Fajr, Sunrise, Dhuhr, Asr, Maghrib, and Isha.
 - Hijri and Gregorian date display.
 - Optional icon-only mode and optional seconds in the countdown.
 - Optional pre-prayer reminders and prayer-time desktop notifications.
@@ -88,7 +88,7 @@ Configure everything from **Settings → Plugins → Prayer Times Enhanced** and
 
 ### Requirements
 
-- Dank Material Shell **>= 1.7.0** (required for composite plugin Dashboard tabs and cards)
+- Dank Material Shell **>= 2.0.0** (required for the DCommon and Dashboard APIs used here)
 - Python 3
 - `salat` Python library
 - Dank Material Shell notifications via the built-in `dms notify` command
@@ -202,7 +202,7 @@ prayerTimes/
 
 - Wayland compositors supported by Dank Material Shell
 - Linux distributions with Python 3, pip, and the required dependencies
-- DMS **>= 1.7.0**
+- DMS **>= 2.0.0**
 
 ---
 

@@ -1,10 +1,10 @@
 {
   "id": "prayerTimesEnhanced",
   "name": "Prayer Times Enhanced",
-  "description": "Offline Islamic prayer times with a Dankbar countdown, Dashboard tab and card, Athan alerts, and a Quran recitation browser/player. Auto-location requests ip-api.com; Quran audio streams from mp3quran.net.",
+  "description": "Offline Islamic prayer times with a Dankbar countdown, Dashboard tab and card, Athan alerts, and a Quran recitation browser/player. Auto-location requests ip-api.com; Quran audio streams from mp3quran.net. Uses the Egyptian General Authority method.",
   "version": "1.5.0",
   "author": "zeroaccess",
-  "requires_dms": ">=1.7.0",
+  "requires_dms": ">=2.0.0",
   "icon": "mosque",
   "type": "composite",
   "capabilities": [
