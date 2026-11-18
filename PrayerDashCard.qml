@@ -31,7 +31,13 @@ DashCardComponent {
     property int    nextTotalSecs: 0
     property string dateHijr:   ""
     property bool   fetching:   false
-    property int    notifyThresholdSec: (Number(pluginData.notifyMinutes) || 15) * 60
+    readonly property real notifyMinutes: {
+        const raw = pluginData.notifyMinutes
+        if (raw === undefined || raw === null || String(raw).trim() === "") return 15
+        const value = Number(raw)
+        return Number.isFinite(value) ? value : 15
+    }
+    property int notifyThresholdSec: notifyMinutes * 60
 
     readonly property bool isUrgent: nextTotalSecs > 0 && nextTotalSecs <= notifyThresholdSec
 

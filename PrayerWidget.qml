@@ -39,7 +39,13 @@ PluginComponent {
     property bool iconOnly: pluginData.iconOnly ?? false
     property bool showSeconds: pluginData.showSeconds ?? false
     property bool use12H: false
-    property int notifyThresholdSec: (Number(pluginData.notifyMinutes) || 15) * 60
+    readonly property real notifyMinutes: {
+        const raw = pluginData.notifyMinutes
+        if (raw === undefined || raw === null || String(raw).trim() === "") return 15
+        const value = Number(raw)
+        return Number.isFinite(value) ? value : 15
+    }
+    property int notifyThresholdSec: notifyMinutes * 60
     property bool playAthanSound: pluginData.playAthanSound ?? false
     property string athanSoundPath: pluginData.athanSoundPath ?? ""
     property bool quranEnabled: pluginData.quranEnabled ?? true

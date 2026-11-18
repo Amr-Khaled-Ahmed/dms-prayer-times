@@ -50,7 +50,13 @@ DashTabComponent {
     property int    playingSurah:      -1
     property bool   quranPlaying:      false
     property bool   fetchingReciters:  false
-    property int    notifyThresholdSec: (Number(pluginData.notifyMinutes) || 15) * 60
+    readonly property real notifyMinutes: {
+        const raw = pluginData.notifyMinutes
+        if (raw === undefined || raw === null || String(raw).trim() === "") return 15
+        const value = Number(raw)
+        return Number.isFinite(value) ? value : 15
+    }
+    property int notifyThresholdSec: notifyMinutes * 60
 
     readonly property bool isUrgent: nextTotalSecs > 0 && nextTotalSecs <= notifyThresholdSec
     readonly property int headerHeight: Theme.spacingXL + Theme.spacingM
