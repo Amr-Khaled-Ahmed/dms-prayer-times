@@ -1,6 +1,7 @@
-// PrayerDashCard.qml — Prayer Times overview card for the Dank Dashboard
-// Shows the current prayer period + countdown to the next prayer.
-// Reads the same shared cache that PrayerWidget uses; no extra processes.
+// PrayerDashCard.qml — Prayer Times Enhanced overview card for the Dashboard.
+// Shows the current prayer period and countdown by reading the shared cache.
+// Auto-location resolves coordinates through ip-api.com; Quran audio streams
+// from mp3quran.net and is handled by the widget and Dashboard tab.
 
 import QtQuick
 import Quickshell
@@ -14,10 +15,15 @@ import qs.Modules.DDash.Overview
 DashCardComponent {
     id: root
 
-    // ── Settings from pluginData (same keys as the bar widget) ───────────────
-    readonly property bool use12H: pluginData.use12H ?? false
+    // ── Settings from pluginData/options (same keys as the bar widget) ───────
+    readonly property bool use12H: options.use12H ?? false
 
     // ── Prayer state ─────────────────────────────────────────────────────────
+    property string fajr:      ""
+    property string dhuhr:     ""
+    property string asr:       ""
+    property string maghrib:   ""
+    property string isha:      ""
     property string currName:   ""
     property string nextName:   ""
     property string nextTime:   ""
@@ -66,6 +72,7 @@ DashCardComponent {
 
     SystemClock {
         id: clock
+        enabled: root.live
         precision: SystemClock.Minutes
         onDateChanged: { if (root.nextTimeSec > 0) root.updateCountdown() }
     }
@@ -114,34 +121,46 @@ DashCardComponent {
         return m[name] || "mosque"
     }
     function processPrayerData(timings, hijri) {
-        const fajr    = stripTZ(timings.Fajr)
-        const dhuhr   = stripTZ(timings.Dhuhr)
-        const asr     = stripTZ(timings.Asr)
-        const maghrib = stripTZ(timings.Maghrib)
-        const isha    = stripTZ(timings.Isha)
+        root.fajr    = stripTZ(timings.Fajr)
+        root.dhuhr   = stripTZ(timings.Dhuhr)
+        root.asr     = stripTZ(timings.Asr)
+        root.maghrib = stripTZ(timings.Maghrib)
+        root.isha    = stripTZ(timings.Isha)
         root.dateHijr = hijri
 
-        const now = Qt.formatTime(clock.date, "HH:mm")
+        refreshPeriod(Qt.formatTime(clock.date, "HH:mm"))
+        updateCountdown()
+    }
+    function refreshPeriod(now) {
+        if (!root.fajr || !root.dhuhr || !root.asr || !root.maghrib || !root.isha)
+            return false
         let period
-        if      (now < fajr)    period = { currName:"Isha",    nextName:"Fajr",    nextTime:fajr    }
-        else if (now < dhuhr)   period = { currName:"Fajr",    nextName:"Dhuhr",   nextTime:dhuhr   }
-        else if (now < asr)     period = { currName:"Dhuhr",   nextName:"Asr",     nextTime:asr     }
-        else if (now < maghrib) period = { currName:"Asr",     nextName:"Maghrib", nextTime:maghrib }
-        else if (now < isha)    period = { currName:"Maghrib", nextName:"Isha",    nextTime:isha    }
-        else                    period = { currName:"Isha",    nextName:"Fajr",    nextTime:fajr    }
+        if      (now < root.fajr)    period = { currName:"Isha",    nextName:"Fajr",    nextTime:root.fajr    }
+        else if (now < root.dhuhr)   period = { currName:"Fajr",    nextName:"Dhuhr",   nextTime:root.dhuhr   }
+        else if (now < root.asr)     period = { currName:"Dhuhr",   nextName:"Asr",     nextTime:root.asr     }
+        else if (now < root.maghrib) period = { currName:"Asr",     nextName:"Maghrib", nextTime:root.maghrib }
+        else if (now < root.isha)    period = { currName:"Maghrib", nextName:"Isha",    nextTime:root.isha    }
+        else                         period = { currName:"Isha",    nextName:"Fajr",    nextTime:root.fajr    }
 
         root.nextTimeSec = timeToMin(period.nextTime) * 60
         root.currName    = period.currName
         root.nextName    = period.nextName
         root.nextTime    = period.nextTime
-        root.updateCountdown()
+        return true
     }
     function updateCountdown() {
         const d   = clock.date
         const now = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()
-        let   diff = root.nextTimeSec - now
+        let diff  = root.nextTimeSec - now
+
+        // Advance immediately when a prayer has passed so the card never shows
+        // a stale ~24h countdown between hourly refreshes.
+        if (root.nextTimeSec > 0 && diff <= 0) {
+            if (refreshPeriod(Qt.formatTime(d, "HH:mm")))
+                diff = root.nextTimeSec - now
+        }
         if (diff < 0) diff += 86400
-        root.nextTotalSecs = diff
+        root.nextTotalSecs = Math.max(0, diff)
     }
 
     // ── Card content ──────────────────────────────────────────────────────────

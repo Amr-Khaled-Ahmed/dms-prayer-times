@@ -1,6 +1,7 @@
-// PrayerDashTab.qml — Prayer Times dashboard tab
-// Shares all logic with the bar widget via PrayerWidget.qml (PluginComponent).
-// This file is the DashTabComponent surface; it reads pluginData directly.
+// PrayerDashTab.qml — Prayer Times Enhanced dashboard tab.
+// Reads pluginData and the shared cache directly; no logic is shared with the
+// bar widget. Auto-location resolves coordinates with an HTTP request to
+// ip-api.com, and Quran recitations stream from mp3quran.net.
 
 import QtQuick
 import QtQuick.Layouts
@@ -52,6 +53,20 @@ DashTabComponent {
     property int    notifyThresholdSec: (Number(pluginData.notifyMinutes) || 15) * 60
 
     readonly property bool isUrgent: nextTotalSecs > 0 && nextTotalSecs <= notifyThresholdSec
+    readonly property int headerHeight: Theme.spacingXL + Theme.spacingM
+    readonly property int standardRowHeight: Theme.spacingXL + Theme.spacingM
+    readonly property int quranRowHeight: Theme.spacingXL + Theme.spacingL + Theme.spacingXS
+    readonly property int heroCardHeight: Theme.spacingXL * 4 + Theme.spacingS
+    readonly property int refreshButtonSize: Theme.spacingXL + Theme.spacingS
+    readonly property int compactControlSize: Theme.spacingXL + Theme.spacingXS
+    readonly property int reciterRefreshSize: Theme.spacingXL + Theme.spacingXXS
+    readonly property int reciterCardHeight: Theme.spacingXL * 4 + Theme.spacingM + Theme.spacingXXS
+    readonly property int reciterResultsHeight: Theme.spacingXL * 6 + Theme.spacingM
+    readonly property int surahCardHeight: Theme.spacingXL * 11 + Theme.spacingL
+    readonly property int prayerLabelWidth: Theme.spacingXL * 3 - Theme.spacingXXS
+    readonly property int prayerTimeWidth: Theme.spacingXL * 3 + Theme.spacingS
+    readonly property int surahNumberWidth: Theme.spacingXL
+    readonly property int surahTextInset: Theme.spacingXL * 3
 
     // Plugin directory (resolved at runtime — works on any install path)
     readonly property string pluginDir: {
@@ -165,6 +180,7 @@ DashTabComponent {
     // ── Clock & timers ───────────────────────────────────────────────────────
     SystemClock {
         id: clock
+        enabled: root.live
         precision: SystemClock.Minutes
         onDateChanged: { if (root.nextTimeSec > 0) root.updateCountdown() }
     }
@@ -181,15 +197,6 @@ DashTabComponent {
     }
 
     onPluginDataChanged: Qt.callLater(root.fetchPrayerTimes)
-
-    Connections {
-        target: SettingsData
-        function onPluginSettingsChanged() {
-            if (!root.pluginService) return
-            root.loadPluginData()
-            Qt.callLater(root.fetchPrayerTimes)
-        }
-    }
 
     onShowQuranPanelChanged: {
         if (showQuranPanel && root.reciters.length === 0 && !root.fetchingReciters)
@@ -288,18 +295,33 @@ DashTabComponent {
                         : ""
             }
         }
-        const now    = Qt.formatTime(clock.date, "HH:mm")
+        const now = Qt.formatTime(clock.date, "HH:mm")
+        root.refreshPeriod(now)
+        root.updateCountdown()
+    }
+    function refreshPeriod(now) {
+        if (!root.fajr || !root.dhuhr || !root.asr || !root.maghrib || !root.isha)
+            return false
         const period = determinePeriod(now, root.fajr, root.dhuhr, root.asr, root.maghrib, root.isha)
         root.nextTimeSec = timeToMin(period.nextTime) * 60
-        root.currName = period.currName; root.nextName = period.nextName; root.nextTime = period.nextTime
-        root.updateCountdown()
+        root.currName = period.currName
+        root.nextName = period.nextName
+        root.nextTime = period.nextTime
+        return true
     }
     function updateCountdown() {
         const now    = clock.date
         const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
-        let diff     = root.nextTimeSec - nowSec
+        let diff = root.nextTimeSec - nowSec
+
+        // Advance immediately when a prayer has passed so the card never shows
+        // a stale ~24h countdown between cache refreshes.
+        if (root.nextTimeSec > 0 && diff <= 0) {
+            if (root.refreshPeriod(Qt.formatTime(now, "HH:mm")))
+                diff = root.nextTimeSec - nowSec
+        }
         if (diff < 0) diff += 86400
-        root.nextTotalSecs = diff
+        root.nextTotalSecs = Math.max(0, diff)
     }
     function getPrayerIcon(name) {
         const m = { Fajr:"bedtime", Dhuhr:"wb_sunny", Asr:"light_mode", Maghrib:"wb_twilight", Isha:"bedtime" }
@@ -331,7 +353,8 @@ DashTabComponent {
         quranPlayer.command = ["bash", "-c",
             "if command -v mpv >/dev/null 2>&1; then exec mpv --no-video --really-quiet \"$0\"; " +
             "elif command -v ffplay >/dev/null 2>&1; then exec ffplay -nodisp -autoexit -loglevel quiet \"$0\"; " +
-            "elif command -v cvlc >/dev/null 2>&1; then exec cvlc --play-and-exit -q \"$0\"; fi", url]
+            "elif command -v cvlc >/dev/null 2>&1; then exec cvlc --play-and-exit -q \"$0\"; " +
+            "else dms notify -a 'Prayer Times Enhanced' 'No audio player found — install mpv, ffplay, or cvlc'; fi", url]
         quranPlayer.running = false; quranPlayer.running = true
         root.playingSurah = num; root.quranPlaying = true
     }
@@ -355,13 +378,13 @@ DashTabComponent {
         // ── Header: Hijri/Gregorian date + refresh ───────────────────────────
         Item {
             width:  parent.width
-            height: Math.max(dateCol.implicitHeight, 36)
+            height: Math.max(dateCol.implicitHeight, root.headerHeight)
 
             Column {
                 id: dateCol
                 anchors.left:            parent.left
                 anchors.verticalCenter:  parent.verticalCenter
-                spacing: 2
+                spacing: Theme.spacingXXS
 
                 StyledText {
                     text:            root.dateHijr !== "" ? root.dateHijr : "Prayer times"
@@ -381,7 +404,7 @@ DashTabComponent {
                 id: refreshBtn
                 anchors.right:          parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                width: 32; height: 32; radius: 16
+                width: root.refreshButtonSize; height: root.refreshButtonSize; radius: width / 2
                 color: refreshMA.containsMouse
                        ? Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.12)
                        : Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.06)
@@ -414,7 +437,7 @@ DashTabComponent {
         Card {
             id: heroCard
             width:   parent.width
-            height:  104
+            height:  root.heroCardHeight
             tone:    "primary"
 
             Row {
@@ -433,7 +456,7 @@ DashTabComponent {
                 Column {
                     id: heroDetails
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 3
+                    spacing: Theme.spacingXS
 
                     StyledText {
                         text: root.nextName !== "" ? "Next prayer" : "Prayer schedule"
@@ -507,17 +530,17 @@ DashTabComponent {
                     delegate: Item {
                         Layout.fillWidth: true
                         Layout.preferredWidth: (prayerList.width - prayerList.columnSpacing * (prayerList.columns - 1)) / prayerList.columns
-                        Layout.preferredHeight: 36
+                        Layout.preferredHeight: root.standardRowHeight
 
                         readonly property bool isNext: modelData.label === root.nextName
                         readonly property bool isCurr: modelData.label === root.currName
 
                         Rectangle {
                             anchors.fill:          parent
-                            anchors.leftMargin:    4
-                            anchors.rightMargin:   4
-                            anchors.topMargin:     2
-                            anchors.bottomMargin:  2
+                            anchors.leftMargin:    Theme.spacingXS
+                            anchors.rightMargin:   Theme.spacingXS
+                            anchors.topMargin:     Theme.spacingXXS
+                            anchors.bottomMargin:  Theme.spacingXXS
                             radius:                height / 2
                             color:  isNext ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.18)
                                            : isCurr ? Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.07)
@@ -547,7 +570,7 @@ DashTabComponent {
                                     font.pixelSize:  Theme.fontSizeMedium
                                     font.weight:     (isNext || isCurr) ? Font.Bold : Font.Normal
                                     color:           isNext ? Theme.primary : (isCurr ? Theme.surfaceText : Theme.surfaceVariantText)
-                                    width:           70
+                                    width:           root.prayerLabelWidth
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
@@ -560,7 +583,7 @@ DashTabComponent {
                                 anchors.right:      parent.right
                                 anchors.verticalCenter: parent.verticalCenter
                                 horizontalAlignment: Text.AlignRight
-                                width:              80
+                                width:              root.prayerTimeWidth
                             }
                         }
                     }
@@ -577,7 +600,7 @@ DashTabComponent {
             // Section header + toggle
             Item {
                 width:  parent.width
-                height: 36
+                height: root.headerHeight
 
                 StyledText {
                     anchors.left:           parent.left
@@ -591,7 +614,7 @@ DashTabComponent {
                 Rectangle {
                     anchors.right:          parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 28; height: 28; radius: 14
+                    width: root.compactControlSize; height: root.compactControlSize; radius: width / 2
                     color: quranToggleMA.containsMouse
                            ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.18)
                            : Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.06)
@@ -620,7 +643,7 @@ DashTabComponent {
                 // Reciter picker row
                 Card {
                     width:  parent.width
-                    height: 110
+                    height: root.reciterCardHeight
 
                     Column {
                         anchors.fill: parent
@@ -629,7 +652,7 @@ DashTabComponent {
 
                         Item {
                             width: parent.width
-                            height: 26
+                            height: root.reciterRefreshSize
 
                             StyledText {
                                 text: root.reciters.length > 0
@@ -651,15 +674,15 @@ DashTabComponent {
                                 id: reciterRefresh
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: 26
-                                height: 26
-                                radius: 13
+                                width: root.reciterRefreshSize
+                                height: root.reciterRefreshSize
+                                radius: width / 2
                                 color: reciterRefreshMouse.containsMouse
                                         ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.18)
                                         : Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.06)
                                 DIcon {
                                     name: "refresh"
-                                    size: Theme.iconSize - 4
+                                    size: Theme.iconSizeSmall + Theme.spacingXS
                                     color: Theme.surfaceVariantText
                                     anchors.centerIn: parent
                                 }
@@ -676,7 +699,7 @@ DashTabComponent {
                         DTextField {
                             id: reciterSearchField
                             width: parent.width
-                            height: 36
+                            height: root.standardRowHeight
                             placeholderText: root.reciters.length > 0
                                     ? "Search reciters or riwayah…"
                                     : "Reciter list is not available"
@@ -697,7 +720,7 @@ DashTabComponent {
 
                 Card {
                     width: parent.width
-                    height: 156
+                    height: root.reciterResultsHeight
                     visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length > 0
 
                     ListView {
@@ -708,7 +731,7 @@ DashTabComponent {
 
                         delegate: Item {
                             width: ListView.view.width
-                            height: 44
+                            height: root.quranRowHeight
                             Rectangle {
                                 anchors.fill: parent
                                 radius: Theme.cornerRadius
@@ -722,7 +745,7 @@ DashTabComponent {
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.leftMargin: Theme.spacingS
                                 anchors.rightMargin: Theme.spacingS
-                                spacing: 2
+                                spacing: Theme.spacingXXS
                                 StyledText {
                                     text: modelData.reciter.name
                                     font.pixelSize: Theme.fontSizeSmall
@@ -756,7 +779,7 @@ DashTabComponent {
                 // Surah list (scrollable)
                 Card {
                     width:  parent.width
-                    height: 280
+                    height: root.surahCardHeight
 
                     ListView {
                         anchors.fill:    parent
@@ -766,14 +789,14 @@ DashTabComponent {
 
                         delegate: Item {
                             width:  ListView.view.width
-                            height: 36
+                            height: root.standardRowHeight
 
                             readonly property int  surahNum: index + 1
                             readonly property bool playing:  root.playingSurah === surahNum
 
                             Rectangle {
                                 anchors.fill:  parent
-                                radius:        6
+                                radius:        Theme.cornerRadiusS
                                 color:         playing
                                                ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.18)
                                                : rowMA.containsMouse
@@ -788,14 +811,14 @@ DashTabComponent {
                                 spacing:               Theme.spacingS
 
                                 StyledText {
-                                    width:           24
+                                    width:           root.surahNumberWidth
                                     anchors.verticalCenter: parent.verticalCenter
                                     text:            surahNum
                                     font.pixelSize:  Theme.fontSizeSmall
                                     color:           Theme.surfaceVariantText
                                 }
                                 StyledText {
-                                    width:           parent.width - 72
+                                    width:           parent.width - root.surahTextInset
                                     anchors.verticalCenter: parent.verticalCenter
                                     text:            root.surahNames[index]
                                     font.pixelSize:  Theme.fontSizeMedium
@@ -805,7 +828,7 @@ DashTabComponent {
                                 DIcon {
                                     anchors.verticalCenter: parent.verticalCenter
                                     name:  playing ? "stop" : "play_arrow"
-                                    size:  Theme.iconSize - 4
+                                    size:  Theme.iconSizeSmall + Theme.spacingXS
                                     color: playing ? Theme.primary : Theme.surfaceVariantText
                                 }
                             }

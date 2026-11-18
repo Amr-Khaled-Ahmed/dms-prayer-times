@@ -1,3 +1,8 @@
+// PrayerWidget.qml — Prayer Times Enhanced Dankbar widget and popout.
+// Runs get_times.py, reads the shared cache, sends DMS notifications, plays
+// Athan audio, and streams Quran recitations from mp3quran.net.
+// Auto-location resolves coordinates with an HTTP request to ip-api.com.
+
 import QtQuick
 import QtQuick.Controls
 import Quickshell
@@ -87,6 +92,16 @@ PluginComponent {
     readonly property color accentColor: Theme.primary
     readonly property color accentBg: Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.18)
     readonly property color subtleBg: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.05)
+    readonly property int popoutWidth: Theme.spacingXL * 10 + Theme.spacingL + Theme.spacingXS
+    readonly property int compactControlSize: Theme.spacingXL + Theme.spacingXS
+    readonly property int standardRowHeight: Theme.spacingXL + Theme.spacingM
+    readonly property int quranRowHeight: Theme.spacingXL + Theme.spacingL + Theme.spacingXS
+    readonly property int prayerLabelWidth: Theme.spacingXL * 2 + Theme.spacingL
+    readonly property int prayerTimeWidth: Theme.spacingXL * 3 - Theme.spacingXXS
+    readonly property int reciterListHeight: Theme.spacingXL * 4 + Theme.spacingL
+    readonly property int surahListHeight: Theme.spacingXL * 9 + Theme.spacingXS
+    readonly property int surahNumberWidth: Theme.spacingXL - Theme.spacingXXS
+    readonly property int surahTextInset: Theme.spacingXL * 3 + Theme.spacingS
 
     // Notification process
     Process {
@@ -195,15 +210,6 @@ PluginComponent {
         }
     }
 
-    Connections {
-        target: SettingsData
-        function onPluginSettingsChanged() {
-            if (!root.pluginService) return
-            root.loadPluginData()
-            Qt.callLater(root.fetchPrayerTimes)
-        }
-    }
-
     onAutoLocationChanged: fetchPrayerTimes()
     onLatitudeChanged: if (!autoLocation) fetchPrayerTimes()
     onLongitudeChanged: if (!autoLocation) fetchPrayerTimes()
@@ -272,7 +278,7 @@ PluginComponent {
             "if command -v mpv >/dev/null 2>&1; then exec mpv --no-video --really-quiet \"$0\"; " +
             "elif command -v ffplay >/dev/null 2>&1; then exec ffplay -nodisp -autoexit -loglevel quiet \"$0\"; " +
             "elif command -v cvlc >/dev/null 2>&1; then exec cvlc --play-and-exit -q \"$0\"; " +
-            "else notify-send -a 'Prayer Widget' 'No audio player found — install mpv, ffplay, or cvlc'; fi",
+            "else dms notify -a 'Prayer Times Enhanced' 'No audio player found — install mpv, ffplay, or cvlc'; fi",
             target]
     }
 
@@ -345,7 +351,7 @@ PluginComponent {
     function sendPrayerNotification() {
         var mins = Math.ceil(root.nextTotalSeconds / 60)
         prayerNotifyProc.command = [
-            "notify-send", "-a", "Prayer Widget", "-u", "critical", "-i", iconPath,
+            "dms", "notify", "-a", "Prayer Times Enhanced", "-u", "critical", "-i", iconPath,
             root.nextName + " in " + mins + " min (at " + root.formatTime(root.nextTime) + ")"
         ]
         prayerNotifyProc.running = true
@@ -353,7 +359,7 @@ PluginComponent {
 
     function sendPrayerTimeNotification() {
         prayerNotifyProc.command = [
-            "notify-send", "-a", "Prayer Widget", "-u", "critical", "-i", iconPath,
+            "dms", "notify", "-a", "Prayer Times Enhanced", "-u", "critical", "-i", iconPath,
             "Time for " + root.nextName
         ]
         prayerNotifyProc.running = true
@@ -365,18 +371,25 @@ PluginComponent {
         var now    = clock.date
         var nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
         var rawDiff = root.nextTimeSec - nowSec
+
+        // A prayer just passed: notify once, then advance the period immediately
+        // instead of showing a stale ~24h countdown until the next cache refresh.
+        if (root.nextTimeSec > 0 && rawDiff <= 0) {
+            if (rawDiff > -60 && !root._wasAtTime) {
+                root._wasAtTime = true
+                sendPrayerTimeNotification()
+            }
+            if (refreshPrayerPeriod(Qt.formatTime(now, "HH:mm")))
+                rawDiff = root.nextTimeSec - nowSec
+        }
+
         var diff = rawDiff
         if (diff < 0) diff += 86400
-        root.nextTotalSeconds = diff
+        root.nextTotalSeconds = Math.max(0, diff)
 
         var urgent = diff > 0 && diff <= root.notifyThresholdSec
         if (urgent && !root._wasUrgent) sendPrayerNotification()
-
-        var atTime = (rawDiff <= 0 && rawDiff > -60)
-        if (atTime && !root._wasAtTime) sendPrayerTimeNotification()
-
         root._wasUrgent = urgent
-        root._wasAtTime = atTime
     }
 
     // Utility functions
@@ -428,6 +441,25 @@ PluginComponent {
         return                        { currName: "Isha",    nextName: "Fajr",    nextTime: fajrT    }
     }
 
+    function refreshPrayerPeriod(nowStr) {
+        if (root.fajr === "" || root.dhuhr === "" || root.asr === ""
+                || root.maghrib === "" || root.isha === "")
+            return false
+
+        var period = determinePrayerPeriod(
+            nowStr, root.fajr, root.dhuhr, root.asr, root.maghrib, root.isha
+        )
+        if (root.nextName !== period.nextName) {
+            root._wasUrgent = false
+            root._wasAtTime = false
+        }
+        root.currName = period.currName
+        root.nextName = period.nextName
+        root.nextTime = period.nextTime
+        root.nextTimeSec = timeToMinutes(period.nextTime) * 60
+        return true
+    }
+
     function processPrayerData(data) {
         var timings  = data.timings
         var dateInfo = data.date
@@ -443,18 +475,7 @@ PluginComponent {
         root.dateHijr = dateInfo.hijri || ""
 
         var nowStr = Qt.formatTime(clock.date, "HH:mm")
-        var period = determinePrayerPeriod(
-            nowStr, root.fajr, root.dhuhr, root.asr, root.maghrib, root.isha
-        )
-
-        root.nextTimeSec = timeToMinutes(period.nextTime) * 60
-        if (root.nextName !== period.nextName) {
-            root._wasUrgent = false
-            root._wasAtTime = false
-        }
-        root.currName = period.currName
-        root.nextName = period.nextName
-        root.nextTime = period.nextTime
+        refreshPrayerPeriod(nowStr)
         updateCountdown()
     }
 
@@ -479,7 +500,7 @@ PluginComponent {
 
             DankIcon {
                 name: root.getPrayerIcon(root.currName)
-                size: Theme.iconSize - 6
+                size: Theme.iconSizeSmall + Theme.spacingXXS
                 color: Theme.primary
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -516,11 +537,11 @@ PluginComponent {
     // Vertical bar pill
     verticalBarPill: Component {
         Column {
-            spacing: 2
+            spacing: Theme.spacingXXS
 
             DankIcon {
                 name: root.getPrayerIcon(root.currName)
-                size: Theme.iconSize - 6
+                size: Theme.iconSizeSmall + Theme.spacingXXS
                 color: Theme.surfaceText
                 anchors.horizontalCenter: parent.horizontalCenter
             }
@@ -528,7 +549,7 @@ PluginComponent {
             StyledText {
                 visible: root.nextTime !== ""
                 text: root.formatCountdown(root.nextTotalSeconds)
-                font.pixelSize: Theme.fontSizeSmall - 2
+                font.pixelSize: Theme.fontSizeXSmall
                 color: root.isUrgent ? root.accentColor : Theme.surfaceText
                 anchors.horizontalCenter: parent.horizontalCenter
             }
@@ -539,8 +560,8 @@ PluginComponent {
     popoutContent: Component {
         Item {
             id: popoutRoot
-            width: 260
-            implicitWidth: 260
+            width: root.popoutWidth
+            implicitWidth: root.popoutWidth
             implicitHeight: content.implicitHeight + Theme.spacingM * 2
 
             Column {
@@ -555,7 +576,7 @@ PluginComponent {
 
                     Column {
                         id: dateCol
-                        spacing: 2
+                        spacing: Theme.spacingXXS
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
 
@@ -575,7 +596,7 @@ PluginComponent {
 
                     Rectangle {
                         id: refreshPill
-                        width: 28; height: 28; radius: width / 2
+                        width: root.compactControlSize; height: root.compactControlSize; radius: width / 2
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         color: refreshArea.containsMouse
@@ -584,7 +605,7 @@ PluginComponent {
 
                         DankIcon {
                             name: "refresh"
-                            size: Theme.iconSize - 4
+                            size: Theme.iconSizeSmall + Theme.spacingXS
                             color: Theme.surfaceVariantText
                             anchors.centerIn: parent
                         }
@@ -607,8 +628,8 @@ PluginComponent {
 
                     Rectangle {
                         width: (parent.width - Theme.spacingXS) / 2
-                        height: 28
-                        radius: 6
+                        height: root.compactControlSize
+                        radius: Theme.cornerRadiusS
                         color: !root.showQuranPanel ? root.accentBg : root.subtleBg
                         border.color: !root.showQuranPanel ? root.accentColor : "transparent"
                         border.width: !root.showQuranPanel ? 1 : 0
@@ -630,8 +651,8 @@ PluginComponent {
 
                     Rectangle {
                         width: (parent.width - Theme.spacingXS) / 2
-                        height: 28
-                        radius: 6
+                        height: root.compactControlSize
+                        radius: Theme.cornerRadiusS
                         color: root.showQuranPanel ? root.accentBg : root.subtleBg
                         border.color: root.showQuranPanel ? root.accentColor : "transparent"
                         border.width: root.showQuranPanel ? 1 : 0
@@ -662,7 +683,7 @@ PluginComponent {
                     Rectangle {
                         width: parent.width
                         height: cdCol.implicitHeight + Theme.spacingM * 2
-                        radius: 8
+                        radius: Theme.cornerRadiusS
                         color: root.accentBg
                         border.color: root.accentColor
                         border.width: 1
@@ -670,7 +691,7 @@ PluginComponent {
                         Column {
                             id: cdCol
                             anchors.centerIn: parent
-                            spacing: 4
+                            spacing: Theme.spacingXS
 
                             StyledText {
                                 text: root.nextName !== "" ? (root.nextName + "  in") : "..."
@@ -710,15 +731,15 @@ PluginComponent {
 
                         delegate: Item {
                             width: parent.width
-                            height: 36
+                            height: root.standardRowHeight
 
                             readonly property bool isNext: modelData.label === root.nextName
                             readonly property bool isCurr: modelData.label === root.currName
 
                             Rectangle {
                                 anchors.fill: parent
-                                anchors.leftMargin: 6; anchors.rightMargin: 6
-                                anchors.topMargin: 2; anchors.bottomMargin: 2
+                                anchors.leftMargin: Theme.spacingS; anchors.rightMargin: Theme.spacingS
+                                anchors.topMargin: Theme.spacingXXS; anchors.bottomMargin: Theme.spacingXXS
                                 radius: height / 2
                                 color: isNext ? root.accentBg : (isCurr ? root.subtleBg : "transparent")
                                 border.color: isNext ? root.accentColor : "transparent"
@@ -727,7 +748,7 @@ PluginComponent {
 
                             Item {
                                 anchors.fill: parent
-                                anchors.leftMargin: 12; anchors.rightMargin: 12
+                                anchors.leftMargin: Theme.spacingM; anchors.rightMargin: Theme.spacingM
 
                                 Row {
                                     spacing: Theme.spacingS
@@ -746,7 +767,7 @@ PluginComponent {
                                         font.pixelSize: Theme.fontSizeMedium
                                         font.weight: (isNext || isCurr) ? Font.Bold : Font.Normal
                                         color: isNext ? root.accentColor : (isCurr ? Theme.surfaceText : Theme.surfaceVariantText)
-                                        width: 64
+                                        width: root.prayerLabelWidth
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
                                 }
@@ -759,7 +780,7 @@ PluginComponent {
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
                                     horizontalAlignment: Text.AlignRight
-                                    width: 70
+                                    width: root.prayerTimeWidth
                                 }
                             }
                         }
@@ -787,7 +808,7 @@ PluginComponent {
 
                     DTextField {
                         width: parent.width
-                        height: 36
+                        height: root.standardRowHeight
                         placeholderText: root.reciters.length > 0
                                 ? "Search reciters or riwayah..."
                                 : "Reciter list is not available"
@@ -806,18 +827,18 @@ PluginComponent {
 
                     ListView {
                         width: parent.width
-                        height: 112
+                        height: root.reciterListHeight
                         visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length > 0
                         clip: true
                         model: root.filteredReciters()
 
                         delegate: Item {
                             width: ListView.view.width
-                            height: 44
+                            height: root.quranRowHeight
 
                             Rectangle {
                                 anchors.fill: parent
-                                radius: 6
+                                radius: Theme.cornerRadiusS
                                 color: reciterResultMouse.containsMouse ? root.subtleBg : "transparent"
                             }
 
@@ -827,7 +848,7 @@ PluginComponent {
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.leftMargin: Theme.spacingS
                                 anchors.rightMargin: Theme.spacingS
-                                spacing: 2
+                                spacing: Theme.spacingXXS
 
                                 StyledText {
                                     width: parent.width
@@ -862,24 +883,24 @@ PluginComponent {
                     // Refresh row
                     Item {
                         width: parent.width
-                        height: 24
+                        height: Theme.spacingXL
 
                         StyledText {
                             anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
                             text: root.reciters.length + " moshaf entries cached"
-                            font.pixelSize: Theme.fontSizeSmall - 1
+                            font.pixelSize: Theme.fontSizeXSmall
                             color: Theme.surfaceVariantText
                         }
 
                         Rectangle {
                             anchors.right: parent.right
-                            width: 24; height: 24; radius: 12
+                            width: Theme.spacingXL; height: Theme.spacingXL; radius: width / 2
                             color: root.subtleBg
 
                             DankIcon {
                                 name: "refresh"
-                                size: Theme.iconSize - 8
+                                size: Theme.iconSizeSmall
                                 color: Theme.surfaceVariantText
                                 anchors.centerIn: parent
                             }
@@ -895,30 +916,30 @@ PluginComponent {
                     // Surah list
                     ListView {
                         width: parent.width
-                        height: 220
+                        height: root.surahListHeight
                         clip: true
                         model: 114
 
                         delegate: Item {
                             width: ListView.view.width
-                            height: 32
+                            height: Theme.iconSizeLarge
 
                             readonly property int surahNum: index + 1
                             readonly property bool isPlaying: root.playingSurah === surahNum
 
                             Rectangle {
                                 anchors.fill: parent
-                                radius: 6
+                                radius: Theme.cornerRadiusS
                                 color: isPlaying ? root.accentBg : "transparent"
                             }
 
                             Row {
                                 anchors.fill: parent
-                                anchors.leftMargin: 8; anchors.rightMargin: 8
+                                anchors.leftMargin: Theme.spacingS; anchors.rightMargin: Theme.spacingS
                                 spacing: Theme.spacingS
 
                                 StyledText {
-                                    width: 22
+                                    width: root.surahNumberWidth
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: surahNum
                                     font.pixelSize: Theme.fontSizeSmall
@@ -926,7 +947,7 @@ PluginComponent {
                                 }
 
                                 StyledText {
-                                    width: parent.width - 80
+                                    width: parent.width - root.surahTextInset
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: root.surahNames[index]
                                     font.pixelSize: Theme.fontSizeMedium
@@ -937,7 +958,7 @@ PluginComponent {
                                 DankIcon {
                                     anchors.verticalCenter: parent.verticalCenter
                                     name: isPlaying ? "stop" : "play_arrow"
-                                    size: Theme.iconSize - 4
+                                    size: Theme.iconSizeSmall + Theme.spacingXS
                                     color: isPlaying ? root.accentColor : Theme.surfaceVariantText
                                 }
                             }

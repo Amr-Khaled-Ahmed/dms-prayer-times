@@ -1,6 +1,6 @@
 # Prayer Times Enhanced Plugin for Dank Material Shell (DMS)
 
-[![DMS](https://img.shields.io/badge/DMS-%E2%89%A51.2.0-6750A4)](https://github.com/AvengeMedia/DankMaterialShell)
+[![DMS](https://img.shields.io/badge/DMS-%E2%89%A51.7.0-6750A4)](https://github.com/AvengeMedia/DankMaterialShell)
 [![Platform](https://img.shields.io/badge/platform-Wayland-4A90D9)](https://wayland.freedesktop.org/)
 [![Python](https://img.shields.io/badge/python-3-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Repository](https://img.shields.io/badge/GitHub-dms--prayer--times-181717?logo=github)](https://github.com/Amr-Khaled-Ahmed/dms-prayer-times)
@@ -30,7 +30,7 @@ Prayer times are calculated locally on your machine. Manual coordinates work wit
 - The bar widget shows the current/next prayer and a live countdown.
 - The Dashboard tab shows the daily schedule, next-prayer countdown, and an optional Quran section.
 - Notifications and Athan playback can be enabled independently.
-- Quran recitations are browsed and streamed from the public [mp3quran.net API](https://www.mp3quran.net/ar/api); the reciter list is cached locally.
+- Quran recitations are browsed and streamed from the public [mp3quran.net API](https://www.mp3quran.net/ar/api); the reciter list is cached locally. Audio streams are fetched over HTTP.
 
 ---
 
@@ -88,10 +88,10 @@ Configure everything from **Settings → Plugins → Prayer Times Enhanced** and
 
 ### Requirements
 
-- Dank Material Shell **>= 1.2.0** (Dashboard card support requires a DMS build with plugin cards)
+- Dank Material Shell **>= 1.7.0** (required for composite plugin Dashboard tabs and cards)
 - Python 3
 - `salat` Python library
-- `notify-send` and a working desktop notification service (for notifications)
+- Dank Material Shell notifications via the built-in `dms notify` command
 - One of `mpv`, `ffplay` (from `ffmpeg`), or `cvlc` (from VLC) for Athan and Quran audio
 - Internet access only for auto-location, reciter-list fetching, and audio streaming
 
@@ -171,8 +171,8 @@ Relative paths resolve from the plugin directory. Check the license of any recor
 
 - No API keys, tokens, passwords, or credentials are stored in this repository.
 - No coordinates are hardcoded. Manual location data stays local and is never sent to a service.
-- Auto-location sends a request to `ip-api.com`, which can see your public IP address.
-- Quran metadata and audio requests go to mp3quran.net and its audio hosts.
+- Auto-location sends an HTTP request to `ip-api.com`, which can see your public IP address.
+- Quran metadata and HTTP audio requests go to mp3quran.net and its audio hosts.
 - Configured Athan URLs are contacted only when playback is requested.
 - This codebase is audited for accidental secret commits; generated caches are ignored by Git.
 
@@ -202,7 +202,7 @@ prayerTimes/
 
 - Wayland compositors supported by Dank Material Shell
 - Linux distributions with Python 3, pip, and the required dependencies
-- DMS **>= 1.2.0**
+- DMS **>= 1.7.0**
 
 ---
 
