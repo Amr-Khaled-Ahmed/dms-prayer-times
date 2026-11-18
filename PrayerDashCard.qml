@@ -46,27 +46,28 @@ DashCardComponent {
     Process {
         id: pyRunner
         onExited: function(code) {
-            if (code === 0) cacheReader.running = true
+            if (code === 0) cacheView.reload()
             root.fetching = false
         }
     }
 
-    Process {
-        id: cacheReader
-        command: ["cat", root.pluginDir + "cache.json"]
-        stdout: SplitParser {
-            onRead: function(line) {
-                if (line.trim() === "") return
-                try {
-                    const obj = JSON.parse(line)
-                    if (!obj.times) return
-                    const t = obj.times
-                    root.processPrayerData(
-                        { Fajr:t[0], Sunrise:t[1], Dhuhr:t[2], Asr:t[3], Maghrib:t[4], Isha:t[5], Imsak:t[0] },
-                        obj.hijri || ""
-                    )
-                } catch(e) {}
-            }
+    FileView {
+        id: cacheView
+        path: root.pluginDir + "cache.json"
+        watchChanges: true
+        blockLoading: false
+        printErrors: false
+
+        onLoaded: {
+            try {
+                const obj = JSON.parse(cacheView.text())
+                if (!obj.times) return
+                const t = obj.times
+                root.processPrayerData(
+                    { Fajr:t[0], Sunrise:t[1], Dhuhr:t[2], Asr:t[3], Maghrib:t[4], Isha:t[5] },
+                    obj.hijri || ""
+                )
+            } catch(e) {}
         }
     }
 
@@ -89,7 +90,7 @@ DashCardComponent {
         if (root.fetching) return
         const loc = pluginData.autoLocation === true
         if (!loc && (!pluginData.latitude || !pluginData.longitude || !pluginData.timeZoneOffset))
-            return cacheReader.running = true  // at minimum try the existing cache
+            return cacheView.reload()  // at minimum try the existing cache
         root.fetching = true
         const args = ["python3", root.pluginDir + "get_times.py", root.pluginDir + "cache.json"]
         if (loc) args.push("auto")

@@ -98,7 +98,7 @@ DashTabComponent {
         id: pyRunner
         onExited: function(code) {
             if (code === 0) {
-                cacheReader.running = true
+                cacheView.reload()
                 if (root.hasPrayerData) root.statusMessage = ""
             } else {
                 root.statusMessage = root.hasPrayerData
@@ -109,34 +109,36 @@ DashTabComponent {
         }
     }
 
-    Process {
-        id: cacheReader
-        command: ["cat", root.pluginDir + "cache.json"]
-        stdout: SplitParser {
-            onRead: function(line) {
-                if (line.trim() === "") return
-                try {
-                    const obj = JSON.parse(line)
-                    if (!Array.isArray(obj.times) || obj.times.length < 6) {
-                        console.warn("Prayer Times: cached schedule has an invalid format")
-                        return
-                    }
-                    const t = obj.times
-                    root.processPrayerData({
-                        timings: {
-                            Fajr:    t[0], Sunrise: t[1], Dhuhr:   t[2],
-                            Asr:     t[3], Maghrib: t[4], Isha:    t[5],
-                            Imsak:   obj.imsak || t[6] || "", Sunset:  t[4]
-                        },
-                        date: { readable: obj.date || "", hijri: obj.hijri || "" }
-                    })
-                } catch(e) {
-                    console.warn("Prayer Times: couldn't parse cached schedule:", e)
+    FileView {
+        id: cacheView
+        path: root.pluginDir + "cache.json"
+        watchChanges: true
+        blockLoading: false
+        printErrors: false
+
+        onLoaded: {
+            try {
+                const obj = JSON.parse(cacheView.text())
+                if (!Array.isArray(obj.times) || obj.times.length < 6) {
+                    console.warn("Prayer Times: cached schedule has an invalid format")
+                    return
                 }
+                const t = obj.times
+                root.processPrayerData({
+                    timings: {
+                        Fajr:    t[0], Sunrise: t[1], Dhuhr:   t[2],
+                        Asr:     t[3], Maghrib: t[4], Isha:    t[5],
+                        Imsak:   obj.imsak || t[6] || "", Sunset:  t[4]
+                    },
+                    date: { readable: obj.date || "", hijri: obj.hijri || "" }
+                })
+            } catch(e) {
+                console.warn("Prayer Times: couldn't parse cached schedule:", e)
             }
         }
-        onExited: function(code) {
-            if (code !== 0 && !root.hasPrayerData)
+
+        onLoadFailed: {
+            if (!root.hasPrayerData)
                 root.statusMessage = "No saved prayer times. Set your location in plugin settings."
         }
     }
@@ -147,26 +149,27 @@ DashTabComponent {
         onExited: function(code) {
             root.fetchingReciters = false
             root.reciterStatus = code === 0 ? "" : "Couldn't refresh the reciter list."
-            reciterCacheReader.running = true
+            reciterCacheView.reload()
         }
     }
 
-    Process {
-        id: reciterCacheReader
-        command: ["cat", root.pluginDir + "reciters.json"]
-        stdout: SplitParser {
-            onRead: function(line) {
-                if (line.trim() === "") return
-                try {
-                    const obj = JSON.parse(line)
-                    if (obj.reciters && obj.reciters.length > 0) {
-                        root.reciters = obj.reciters
-                        if (root.selectedReciter >= root.reciters.length)
-                            root.selectedReciter = 0
-                    }
-                } catch(e) {
-                    console.warn("Prayer Times: couldn't parse cached reciters:", e)
+    FileView {
+        id: reciterCacheView
+        path: root.pluginDir + "reciters.json"
+        watchChanges: true
+        blockLoading: false
+        printErrors: false
+
+        onLoaded: {
+            try {
+                const obj = JSON.parse(reciterCacheView.text())
+                if (obj.reciters && obj.reciters.length > 0) {
+                    root.reciters = obj.reciters
+                    if (root.selectedReciter >= root.reciters.length)
+                        root.selectedReciter = 0
                 }
+            } catch(e) {
+                console.warn("Prayer Times: couldn't parse cached reciters:", e)
             }
         }
     }
@@ -191,9 +194,9 @@ DashTabComponent {
     }
 
     Component.onCompleted: {
-        cacheReader.running = true
+        cacheView.reload()
         root.fetchPrayerTimes()
-        reciterCacheReader.running = true
+        reciterCacheView.reload()
     }
 
     onPluginDataChanged: Qt.callLater(root.fetchPrayerTimes)
@@ -350,7 +353,7 @@ DashTabComponent {
     function playSurah(ridx, num) {
         if (!root.reciters.length) return
         const url = root.reciters[ridx].server + pad3(num) + ".mp3"
-        quranPlayer.command = ["bash", "-c",
+        quranPlayer.command = ["sh", "-c",
             "if command -v mpv >/dev/null 2>&1; then exec mpv --no-video --really-quiet \"$0\"; " +
             "elif command -v ffplay >/dev/null 2>&1; then exec ffplay -nodisp -autoexit -loglevel quiet \"$0\"; " +
             "elif command -v cvlc >/dev/null 2>&1; then exec cvlc --play-and-exit -q \"$0\"; " +

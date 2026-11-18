@@ -129,42 +129,43 @@ PluginComponent {
     Process {
         id: pyRunner
         onExited: function(code) {
-            if (code === 0) cacheReader.running = true
+            if (code === 0) cacheView.reload()
             root.fetching = false
         }
     }
 
     // Cache reader
-    Process {
-        id: cacheReader
-        command: ["cat", root.pluginDir + "cache.json"]
-        stdout: SplitParser {
-            onRead: function(line) {
-                if (line.trim() === "") return
-                try {
-                    var obj = JSON.parse(line)
-                    if (!obj.times) return
-                    var t = obj.times
-                    var fakeData = {
-                        timings: {
-                            Fajr:    t[0],
-                            Sunrise: t[1],
-                            Dhuhr:   t[2],
-                            Asr:     t[3],
-                            Maghrib: t[4],
-                            Isha:    t[5],
-                            Imsak:   obj.imsak || t[6] || "",
-                            Sunset:  t[4]
-                        },
-                        date: {
-                            readable: obj.date || "",
-                            hijri: obj.hijri || ""
-                        }
+    FileView {
+        id: cacheView
+        path: root.pluginDir + "cache.json"
+        watchChanges: true
+        blockLoading: false
+        printErrors: false
+
+        onLoaded: {
+            try {
+                var obj = JSON.parse(cacheView.text())
+                if (!obj.times) return
+                var t = obj.times
+                var fakeData = {
+                    timings: {
+                        Fajr:    t[0],
+                        Sunrise: t[1],
+                        Dhuhr:   t[2],
+                        Asr:     t[3],
+                        Maghrib: t[4],
+                        Isha:    t[5],
+                        Imsak:   obj.imsak || t[6] || "",
+                        Sunset:  t[4]
+                    },
+                    date: {
+                        readable: obj.date || "",
+                        hijri: obj.hijri || ""
                     }
-                    processPrayerData(fakeData)
-                } catch(e) {
-                    console.warn("Prayer Times: couldn't parse cached schedule:", e)
                 }
+                processPrayerData(fakeData)
+            } catch(e) {
+                console.warn("Prayer Times: couldn't parse cached schedule:", e)
             }
         }
     }
@@ -176,26 +177,27 @@ PluginComponent {
         onExited: function(code) {
             root.fetchingReciters = false
             root.reciterStatus = code === 0 ? "" : "Couldn't refresh the reciter list."
-            reciterCacheReader.running = true
+            reciterCacheView.reload()
         }
     }
 
     // Reciter cache reader
-    Process {
-        id: reciterCacheReader
-        command: ["cat", root.pluginDir + "reciters.json"]
-        stdout: SplitParser {
-            onRead: function(line) {
-                if (line.trim() === "") return
-                try {
-                    var obj = JSON.parse(line)
-                    if (obj.reciters && obj.reciters.length > 0) {
-                        root.reciters = obj.reciters
-                        if (root.selectedReciterIndex >= root.reciters.length) root.selectedReciterIndex = 0
-                    }
-                } catch(e) {
-                    console.warn("Prayer Times: couldn't parse cached reciters:", e)
+    FileView {
+        id: reciterCacheView
+        path: root.pluginDir + "reciters.json"
+        watchChanges: true
+        blockLoading: false
+        printErrors: false
+
+        onLoaded: {
+            try {
+                var obj = JSON.parse(reciterCacheView.text())
+                if (obj.reciters && obj.reciters.length > 0) {
+                    root.reciters = obj.reciters
+                    if (root.selectedReciterIndex >= root.reciters.length) root.selectedReciterIndex = 0
                 }
+            } catch(e) {
+                console.warn("Prayer Times: couldn't parse cached reciters:", e)
             }
         }
     }
@@ -204,9 +206,9 @@ PluginComponent {
     onPluginServiceChanged: {
         if (pluginService) {
             loadPluginData()
-            cacheReader.running = true
+            cacheView.reload()
             Qt.callLater(root.fetchPrayerTimes)
-            reciterCacheReader.running = true // pick up any previously cached reciter list
+            reciterCacheView.reload() // pick up any previously cached reciter list
         }
     }
 
@@ -254,7 +256,7 @@ PluginComponent {
             args.push("auto")
         } else {
             if (root.latitude === "" || root.longitude === "" || root.timeZoneOffset === "") {
-                cacheReader.running = true
+                cacheView.reload()
                 if (SettingsData.pluginSettings[root.pluginId] !== undefined)
                     console.warn("Prayer Times: manual location is enabled but lat/lon/UTC offset " +
                                   "are not fully set — open plugin settings to fill them in.")
@@ -274,7 +276,7 @@ PluginComponent {
 
     // Runs an audio file/URL through whichever player is installed (mpv, then ffplay, then cvlc)
     function playerCommandFor(target) {
-        return ["bash", "-c",
+        return ["sh", "-c",
             "if command -v mpv >/dev/null 2>&1; then exec mpv --no-video --really-quiet \"$0\"; " +
             "elif command -v ffplay >/dev/null 2>&1; then exec ffplay -nodisp -autoexit -loglevel quiet \"$0\"; " +
             "elif command -v cvlc >/dev/null 2>&1; then exec cvlc --play-and-exit -q \"$0\"; " +

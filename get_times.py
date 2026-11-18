@@ -57,7 +57,7 @@ def gregorian_to_hijri(year, month, day):
     b = 2 - a + int(a / 4)
 
     JD = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + b - 1524.5
-    JDN = int(JD)
+    JDN = int(JD + 0.5)
 
     l = JDN - 1948440 + 10632
     n2 = int(l / 10631)
