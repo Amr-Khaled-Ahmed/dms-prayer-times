@@ -5,7 +5,7 @@ import qs.Modules.Plugins
 
 PluginSettings {
     id: root
-    pluginId: "prayerTimes"
+    pluginId: "prayerTimesEnhanced"
 
     StyledText {
         width: parent.width

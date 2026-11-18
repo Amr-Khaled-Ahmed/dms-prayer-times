@@ -10,7 +10,7 @@ import qs.Modules.Plugins
 
 PluginComponent {
     id: root
-    pluginId: "prayerTimes"
+    pluginId: "prayerTimesEnhanced"
 
     // Prayer times data
     property string fajr: ""

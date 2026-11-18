@@ -1,4 +1,4 @@
-# Prayer Times Plugin for Dank Material Shell (DMS)
+# Prayer Times Enhanced Plugin for Dank Material Shell (DMS)
 
 [![DMS](https://img.shields.io/badge/DMS-%E2%89%A51.2.0-6750A4)](https://github.com/AvengeMedia/DankMaterialShell)
 [![Platform](https://img.shields.io/badge/platform-Wayland-4A90D9)](https://wayland.freedesktop.org/)
@@ -6,6 +6,8 @@
 [![Repository](https://img.shields.io/badge/GitHub-dms--prayer--times-181717?logo=github)](https://github.com/Amr-Khaled-Ahmed/dms-prayer-times)
 
 An offline-first Islamic prayer times plugin for [Dank Material Shell](https://github.com/AvengeMedia/DankMaterialShell). It adds a live Dankbar widget, a full Prayer Times Dashboard tab and card, automated Athan audio alerts at prayer times, and an integrated Quran recitation browser/player.
+
+Prayer Times Enhanced is a feature-extended fork of the original [Prayer Times](https://github.com/muadzmo/prayertimes) plugin by **muadz**, adding offline calculation, a Dashboard tab and card, and an integrated Quran player.
 
 Prayer times are calculated locally on your machine. Manual coordinates work without an internet connection, and no location or credentials are hardcoded in the source.
 
@@ -21,7 +23,7 @@ Prayer times are calculated locally on your machine. Manual coordinates work wit
 
 ## Overview
 
-**Prayer Times** is a composite DMS plugin (Dankbar widget + Dashboard tab + Dashboard card) that keeps the next prayer visible at a glance and provides a complete daily schedule when you need more detail.
+**Prayer Times Enhanced** is a composite DMS plugin (Dankbar widget + Dashboard tab + Dashboard card) that keeps the next prayer visible at a glance and provides a complete daily schedule when you need more detail.
 
 - Prayer times are calculated locally with the [`salat`](https://pypi.org/project/salat/) Python library using the **Egyptian General Authority** method and standard Asr calculation.
 - The Hijri date is calculated offline using the Kuwaiti algorithm.
@@ -45,9 +47,9 @@ Prayer times are calculated locally on your machine. Manual coordinates work wit
 
 ### Dashboard Tab & Card
 
-- Dedicated **Prayer Times** Dashboard tab registered as `plugin_prayerTimes`.
+- Dedicated **Prayer Times Enhanced** Dashboard tab registered as `plugin_prayerTimesEnhanced`.
 - Full interactive daily schedule with the next prayer highlighted.
-- Dashboard overview card showing the current period and countdown; clicking it opens the Prayer Times tab.
+- Dashboard overview card showing the current period and countdown; clicking it opens the Prayer Times Enhanced tab.
 - Responsive layout that works in the regular Dashboard and in Island mode on supported DMS builds.
 - Keyboard-friendly navigation and a manual refresh action.
 
@@ -61,12 +63,12 @@ Prayer times are calculated locally on your machine. Manual coordinates work wit
 
 ### Customizable Settings
 
-Configure everything from **Settings → Plugins → Prayer Times** and the Dashboard plugin options:
+Configure everything from **Settings → Plugins → Prayer Times Enhanced** and the Dashboard plugin options:
 
 | Setting | Description | Default |
 |---|---|---|
 | 12-hour format | Display Dashboard prayer times in 12-hour format | Off |
-| Show Quran section | Show or hide the Quran section in the Prayer Times Dashboard tab | On |
+| Show Quran section | Show or hide the Quran section in the Prayer Times Enhanced Dashboard tab | On |
 | Icon Only Mode | Show only the prayer icon in the bar | Off |
 | Show Seconds | Show seconds in the countdown timer | Off |
 | Auto Detect Location | Resolve approximate coordinates via IP-based geolocation | Off |
@@ -129,17 +131,17 @@ cp -r dms-prayer-times ~/.config/DankMaterialShell/plugins/prayerTimes
 
 1. Open **Settings → Plugins**.
 2. Click **Scan for Plugins**.
-3. Enable **Prayer Times**.
-4. Open **Settings → DankBar → Add Widget → Prayer Times**.
-5. Open the DMS Dashboard and add the **Prayer Times** card from the editor if desired.
+3. Enable **Prayer Times Enhanced**.
+4. Open **Settings → DankBar → Add Widget → Prayer Times Enhanced**.
+5. Open the DMS Dashboard and add the **Prayer Times Enhanced** card from the editor if desired.
 
 To open the Dashboard tab from a keybind:
 
 ```lua
 hl.bind(
     "SUPER + P",
-    hl.dsp.exec_cmd("dms ipc call dash open plugin_prayerTimes"),
-    { description = "Prayer Times dashboard" }
+    hl.dsp.exec_cmd("dms ipc call dash open plugin_prayerTimesEnhanced"),
+    { description = "Prayer Times Enhanced dashboard" }
 )
 ```
 
@@ -158,7 +160,7 @@ hl.bind(
 ### Setting an Athan sound
 
 1. Add a recording you have permission to use to `assets/athan.mp3`, or use any local path or direct URL.
-2. Open **Settings → Plugins → Prayer Times → Athan Sound** and enter the path.
+2. Open **Settings → Plugins → Prayer Times Enhanced → Athan Sound** and enter the path.
 3. Enable **Play Athan Sound**.
 
 Relative paths resolve from the plugin directory. Check the license of any recording before redistributing it.
@@ -182,7 +184,7 @@ Relative paths resolve from the plugin directory. Check the license of any recor
 prayerTimes/
 ├── plugin.json                 # Plugin manifest, components, settings, Dashboard registration
 ├── PrayerWidget.qml            # Dankbar widget, popout, notifications, Athan, Quran player
-├── PrayerDashTab.qml           # Prayer Times Dashboard tab and Quran section
+├── PrayerDashTab.qml           # Prayer Times Enhanced Dashboard tab and Quran section
 ├── PrayerDashCard.qml          # Dashboard overview card
 ├── PrayerSettings.qml          # Plugin settings panel
 ├── get_times.py                # Offline prayer-time and Hijri-date calculation
