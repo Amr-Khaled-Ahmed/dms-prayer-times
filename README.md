@@ -1,68 +1,139 @@
-# Prayer Times
+# Prayer Times Plugin for Dank Material Shell (DMS)
 
-![Prayer Times Dashboard screenshot](assets/prayer-times-dashboard.png)
+[![DMS](https://img.shields.io/badge/DMS-%E2%89%A51.2.0-6750A4)](https://github.com/AvengeMedia/DankMaterialShell)
+[![Platform](https://img.shields.io/badge/platform-Wayland-4A90D9)](https://wayland.freedesktop.org/)
+[![Python](https://img.shields.io/badge/python-3-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Repository](https://img.shields.io/badge/GitHub-dms--prayer--times-181717?logo=github)](https://github.com/Amr-Khaled-Ahmed/dms-prayer-times)
 
-A DankMaterialShell plugin for daily Islamic prayer times. It provides a DankBar widget and popout, a Prayer Times tab and overview card in the DMS Dashboard, optional prayer notifications and Athan playback, and a Quran recitation browser/player.
+An offline-first Islamic prayer times plugin for [Dank Material Shell](https://github.com/AvengeMedia/DankMaterialShell). It adds a live Dankbar widget, a full Prayer Times Dashboard tab and card, automated Athan audio alerts at prayer times, and an integrated Quran recitation browser/player.
+
+Prayer times are calculated locally on your machine. Manual coordinates work without an internet connection, and no location or credentials are hardcoded in the source.
+
+---
+
+## Preview
+
+![Prayer Times Dashboard tab](assets/prayer-times-dashboard.png)
+
+> **Screenshot placeholder:** additional Dankbar and popout previews can be added here as `assets/prayer-times-bar.png` and `assets/prayer-times-popout.png`.
+
+---
+
+## Overview
+
+**Prayer Times** is a composite DMS plugin (Dankbar widget + Dashboard tab + Dashboard card) that keeps the next prayer visible at a glance and provides a complete daily schedule when you need more detail.
+
+- Prayer times are calculated locally with the [`salat`](https://pypi.org/project/salat/) Python library using the **Egyptian General Authority** method and standard Asr calculation.
+- The Hijri date is calculated offline using the Kuwaiti algorithm.
+- The bar widget shows the current/next prayer and a live countdown.
+- The Dashboard tab shows the daily schedule, next-prayer countdown, and an optional Quran section.
+- Notifications and Athan playback can be enabled independently.
+- Quran recitations are browsed and streamed from the public [mp3quran.net API](https://www.mp3quran.net/ar/api); the reciter list is cached locally.
+
+---
 
 ## Features
 
-- Next prayer name and countdown in the DankBar
-- Popout view showing all prayer times (Imsak, Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha)
-- Hijri and Gregorian date display
-- Optional desktop reminders before prayer and notifications at prayer time
-- Optional Athan playback from a local audio file or direct URL
-- Quran recitation browser/player in the widget popout and Dashboard tab
-- Searchable reciter and riwayah picker in the Dashboard tab and widget popout
-- Prayer Times Dashboard tab with a countdown, daily prayer schedule, and optional Quran section
-- Dashboard overview card showing the current period and countdown; clicking it opens the Prayer Times tab
-- Prayer times calculated locally with the `salat` Python library; the Hijri date is calculated offline too
+### Dankbar Widget
 
-## How It Works
+- Current or next prayer name with a live countdown directly in the top bar.
+- Popout schedule covering Imsak, Fajr, Sunrise, Dhuhr, Asr, Maghrib, and Isha.
+- Hijri and Gregorian date display.
+- Optional icon-only mode and optional seconds in the countdown.
+- Optional pre-prayer reminders and prayer-time desktop notifications.
+- Optional Athan playback from a local audio file or direct URL.
 
-Prayer times are calculated locally using the `salat` Python library with the **Egyptian General Authority** method and standard Asr calculation. The plugin reads its local `cache.json` as soon as the Dashboard tab or bar widget opens, so previously calculated timings appear immediately. It recalculates on startup, after location settings change, and every hour, then updates the cache. The cache and fetched reciter list are generated locally and excluded from Git. If the location is not configured, saved timings remain visible with a reminder to configure a location instead of leaving the tab stuck on a loading screen. The Hijri date is calculated locally with the Kuwaiti algorithm.
+### Dashboard Tab & Card
 
-**Location** comes from Settings → Plugins → Prayer Times → Location & Timezone:
-- **Manual (default)**: enter your latitude, longitude, and UTC offset. The fields are blank on a fresh install, so set all three before new calculations can run. Existing cached times can still be displayed; manual calculations work offline.
-- **Auto Detect Location**: resolves approximate coordinates and timezone via IP-based geolocation (`ip-api.com`) whenever timings are recalculated. Requires internet.
+- Dedicated **Prayer Times** Dashboard tab registered as `plugin_prayerTimes`.
+- Full interactive daily schedule with the next prayer highlighted.
+- Dashboard overview card showing the current period and countdown; clicking it opens the Prayer Times tab.
+- Responsive layout that works in the regular Dashboard and in Island mode on supported DMS builds.
+- Keyboard-friendly navigation and a manual refresh action.
 
-The Quran player fetches its reciter/riwayah list from the public [mp3quran.net API](https://www.mp3quran.net/ar/api) when first opened and caches it in `reciters.json`. Use its refresh button to fetch the list again. Audio playback is handed off to the first installed player in this order: `mpv`, `ffplay`, then `cvlc`.
+### Quran Recitation Browser & Player
 
-## Requirements
+- Browse reciters and riwayah variants from mp3quran.net.
+- Searchable reciter picker in both the widget popout and the Dashboard tab.
+- Stream any surah through the first available local player: `mpv`, `ffplay`, or `cvlc`.
+- Reciter list is cached in `reciters.json` and can be refreshed on demand.
+- The Quran section can be hidden entirely from the Dashboard tab.
 
-- DankMaterialShell >= 1.2.0; the Dashboard tab and card need a DMS version with plugin Dashboard support
-- Python 3
-- `salat` Python library
-- `notify-send` and a working desktop notification service for notifications
-- One of `mpv`, `ffplay` (part of `ffmpeg`), or `cvlc` (part of VLC) for Athan and Quran audio playback; not needed to calculate prayer times
-- Internet access for auto-location, fetching the Quran reciter list, streaming Quran audio, or streaming an Athan URL. Manual prayer-time calculation and Hijri date calculation work offline.
+### Customizable Settings
 
-Install the dependencies:
+Configure everything from **Settings → Plugins → Prayer Times** and the Dashboard plugin options:
 
-```bash
-pip install salat
-sudo pacman -S mpv        # or: sudo apt install mpv   (any one of mpv/ffmpeg/vlc works)
-```
+| Setting | Description | Default |
+|---|---|---|
+| 12-hour format | Display Dashboard prayer times in 12-hour format | Off |
+| Show Quran section | Show or hide the Quran section in the Prayer Times Dashboard tab | On |
+| Icon Only Mode | Show only the prayer icon in the bar | Off |
+| Show Seconds | Show seconds in the countdown timer | Off |
+| Auto Detect Location | Resolve approximate coordinates via IP-based geolocation | Off |
+| Latitude | Manual latitude in decimal degrees (-90 to 90) | Empty |
+| Longitude | Manual longitude in decimal degrees (-180 to 180) | Empty |
+| UTC Offset | Manual UTC offset in hours (-14 to +14, fractional supported) | Empty |
+| Reminder (minutes) | Minutes before prayer to send a notification | 15 |
+| Play Athan Sound | Play an audio file when each prayer time starts | Off |
+| Athan Sound | Local `.mp3`/`.ogg`/`.wav` path or direct `http(s)` URL | Empty |
+| Show Quran Tab in Popout | Add the Quran browser/player tab to the widget popout | On |
+
+> Manual location fields are blank on a fresh install. Set latitude, longitude, and UTC offset before relying on new calculations, or enable **Auto Detect Location**.
+
+---
 
 ## Installation
 
+### Requirements
+
+- Dank Material Shell **>= 1.2.0** (Dashboard card support requires a DMS build with plugin cards)
+- Python 3
+- `salat` Python library
+- `notify-send` and a working desktop notification service (for notifications)
+- One of `mpv`, `ffplay` (from `ffmpeg`), or `cvlc` (from VLC) for Athan and Quran audio
+- Internet access only for auto-location, reciter-list fetching, and audio streaming
+
+Install the Python dependency and an audio player:
+
 ```bash
-mkdir -p ~/.config/dms/plugins
-cp -r prayerTimes ~/.config/dms/plugins/
+pip install salat
+
+# Arch Linux
+sudo pacman -S mpv
+
+# Debian / Ubuntu
+sudo apt install mpv
 ```
 
-Then in DMS:
-1. Settings → Plugins → Scan for Plugins
-2. Enable **Prayer Times**
-3. Settings → DankBar → Add Widget → Prayer Times
-4. Open the DMS Dashboard and add the **Prayer Times** card from its editor if you want the overview card.
+### Install the plugin
 
-The **Prayer Times** Dashboard tab is registered by the plugin. If it is not shown, confirm that the plugin is enabled and that your DMS build supports plugin Dashboard tabs.
+Clone the repository and link it into the DMS plugin directory:
 
-## Dashboard and Island mode
+```bash
+git clone https://github.com/Amr-Khaled-Ahmed/dms-prayer-times.git
+mkdir -p ~/.config/DankMaterialShell/plugins
 
-The Prayer Times Dashboard tab is registered as `plugin_prayerTimes`. On DMS builds without plugin-tab Island support, it appears only in the regular Dashboard. If you have applied the local DMS Island plugin-tab integration, it also appears in the Island's native Dashboard tab navigation. Use `dms ipc call dash open plugin_prayerTimes` to select and open it; use `dash open`, not `dash toggle`, when you want to switch tabs while the Dashboard is already visible.
+ln -s "$PWD/dms-prayer-times" \
+  ~/.config/DankMaterialShell/plugins/prayerTimes
+```
 
-To open the Prayer Times tab from a DankMaterialShell Lua keybind, add this to your `binds-user.lua` and change the key combination if needed:
+Or copy the directory instead of symlinking:
+
+```bash
+cp -r dms-prayer-times ~/.config/DankMaterialShell/plugins/prayerTimes
+```
+
+> On installations that use the legacy `~/.config/dms` path, `~/.config/dms/plugins/` is typically a symlink to `~/.config/DankMaterialShell/plugins/`. Either location works as long as it resolves to the active DMS configuration directory.
+
+### Enable in DMS
+
+1. Open **Settings → Plugins**.
+2. Click **Scan for Plugins**.
+3. Enable **Prayer Times**.
+4. Open **Settings → DankBar → Add Widget → Prayer Times**.
+5. Open the DMS Dashboard and add the **Prayer Times** card from the editor if desired.
+
+To open the Dashboard tab from a keybind:
 
 ```lua
 hl.bind(
@@ -72,82 +143,79 @@ hl.bind(
 )
 ```
 
-## Configuration
+---
 
-Open Settings → Plugins → Prayer Times to configure:
+## How It Works
 
-| Setting | Description | Default |
-|---|---|---|
-| Icon Only Mode | Show only the prayer icon in the bar | Off |
-| Show Seconds | Show seconds in the countdown timer | Off |
-| Auto Detect Location | Resolve coordinates via IP-based geolocation instead of manual entry | Off |
-| Latitude | Manual latitude in decimal degrees, from -90 to 90 | Empty — must be set manually |
-| Longitude | Manual longitude in decimal degrees, from -180 to 180 | Empty — must be set manually |
-| UTC Offset | Manual UTC offset in hours, from -14 to +14 (fractional offsets supported) | Empty — must be set manually |
-| Reminder (minutes) | How many minutes before prayer to send a notification | 15 |
-| Play Athan Sound | Play an audio file when each prayer time starts | Off |
-| Athan Sound (file path or URL) | Local `.mp3`/`.ogg`/`.wav` path, or a direct `http(s)` link | Empty |
-| Show Quran Tab in Popout | Adds the Quran browser/player tab to the popout | On |
+1. On startup, on location changes, and hourly, the plugin runs `get_times.py`.
+2. In **manual** mode it uses your saved latitude, longitude, and UTC offset and calculates offline.
+3. In **auto** mode it resolves approximate coordinates through `ip-api.com`, then calculates locally.
+4. Results are written to `cache.json` and rendered immediately by the widget and Dashboard.
+5. The Quran panel fetches the reciter list from mp3quran.net and caches it in `reciters.json`.
 
-The Dashboard also has plugin options:
-
-| Dashboard option | Description | Default |
-|---|---|---|
-| 12-hour format | Display Dashboard prayer times in 12-hour format | Off |
-| Show Quran section | Show or hide the Quran section in the Prayer Times Dashboard tab | On |
-
-### Using the Quran tab
-
-1. Open the widget popout and switch to **Quran**, or open the Prayer Times Dashboard tab and expand its Quran section.
-2. The first time, the plugin fetches the reciter list (internet required) and caches it in `reciters.json`. Use the refresh icon beside the selected reciter to fetch the list again.
-3. Type a reciter name or riwayah into the search field in the Dashboard tab or widget popout and choose a matching result. The selected reciter appears above the search.
-4. Select a surah to stream it. Select the playing surah again or use the stop button to stop playback.
+`cache.json`, `reciters.json`, and `__pycache__/` are generated locally and excluded from Git. Your personal Athan recording in `assets/athan.mp3` is also excluded by default so unlicensed audio is not published accidentally.
 
 ### Setting an Athan sound
 
-No audio recording is bundled. Add an Athan recording that you have permission to use to `assets/athan.mp3`, or configure another file/URL. The `.gitignore` excludes `assets/athan.mp3` by default so a personal or unlicensed recording is not accidentally uploaded. Only remove that ignore rule if you have verified the recording's redistribution license. Sources that offer free-to-use recordings include:
+1. Add a recording you have permission to use to `assets/athan.mp3`, or use any local path or direct URL.
+2. Open **Settings → Plugins → Prayer Times → Athan Sound** and enter the path.
+3. Enable **Play Athan Sound**.
 
-- **[Pixabay – Azan sound effects](https://pixabay.com/sound-effects/search/azan/)** — royalty-free, no attribution required, straightforward MP3 download. Easiest option to stay copyright-safe.
-- **[aladhan.com/download-adhans](https://aladhan.com/download-adhans)** — several full Adhan recordings for personal use, including the Fajr version.
-- **[IslamCan.com Azan MP3](https://www.islamcan.com/audio/adhan/index.shtml)** — free downloads, several reciters.
+Relative paths resolve from the plugin directory. Check the license of any recording before redistributing it.
 
-Always check the license on the specific file before redistribution; "free download" does not always mean the file can be republished.
+---
 
-Once you have a file:
+## Privacy & Security
 
-1. Put your licensed recording in this plugin's `assets/` folder.
-2. In Settings → Plugins → Prayer Times → Athan Sound, enter its path (for example `assets/athan.mp3`). Relative paths resolve from the plugin directory.
-3. Alternatively, use any local absolute path (`/home/you/Sounds/athan.mp3`) or a direct streaming URL.
+- No API keys, tokens, passwords, or credentials are stored in this repository.
+- No coordinates are hardcoded. Manual location data stays local and is never sent to a service.
+- Auto-location sends a request to `ip-api.com`, which can see your public IP address.
+- Quran metadata and audio requests go to mp3quran.net and its audio hosts.
+- Configured Athan URLs are contacted only when playback is requested.
+- This codebase is audited for accidental secret commits; generated caches are ignored by Git.
 
-## Location & Privacy
+---
 
-No coordinates are hardcoded. With manual location, the coordinates are used locally and are not sent to a service. With auto-location enabled, the IP-geolocation service receives the lookup request and your public IP address. Quran reciter-list requests and audio streams go to mp3quran.net or its audio hosts; Athan URLs are contacted only when you configure and play one. Prayer-time and reciter caches are stored in the plugin directory.
+## Project Structure
 
-## Files
-
-```
+```text
 prayerTimes/
-├── plugin.json          — plugin manifest, settings, and Dashboard registration
-├── PrayerWidget.qml     — DankBar widget, popout, notifications, and Quran player
-├── PrayerDashTab.qml    — Prayer Times Dashboard tab and Quran section
-├── PrayerDashCard.qml   — Dashboard overview card
-├── PrayerSettings.qml   — settings panel
-├── get_times.py         — Python script for offline prayer-time calculation
-├── fetch_reciters.py    — Python script that caches the reciter list from mp3quran.net
-├── .gitignore           — excludes generated caches, local credentials, and optional audio
+├── plugin.json                 # Plugin manifest, components, settings, Dashboard registration
+├── PrayerWidget.qml            # Dankbar widget, popout, notifications, Athan, Quran player
+├── PrayerDashTab.qml           # Prayer Times Dashboard tab and Quran section
+├── PrayerDashCard.qml          # Dashboard overview card
+├── PrayerSettings.qml          # Plugin settings panel
+├── get_times.py                # Offline prayer-time and Hijri-date calculation
+├── fetch_reciters.py           # Reciter-list fetcher/cache writer
+├── icon.svg                    # Plugin icon
 ├── assets/
-│   └── prayer-times-dashboard.png — Dashboard screenshot
-└── icon.svg             — plugin icon
+│   └── prayer-times-dashboard.png
+├── .gitignore
+└── README.md
 ```
 
-`cache.json` and `reciters.json` are created locally when needed and are intentionally not committed.
+---
 
 ## Compatibility
 
-- **Compositors**: Wayland compositors supported by DMS
-- **Distributions**: Linux distributions with Python 3, pip, and the required dependencies
+- Wayland compositors supported by Dank Material Shell
+- Linux distributions with Python 3, pip, and the required dependencies
+- DMS **>= 1.2.0**
 
-## Author
+---
 
-Customized by zeroaccess
-Original plugin by muadz
+## Contributing
+
+Issues and pull requests are welcome at
+[Amr-Khaled-Ahmed/dms-prayer-times](https://github.com/Amr-Khaled-Ahmed/dms-prayer-times).
+
+When reporting a bug, include your DMS version, distribution, compositor, and any relevant output from `dms run` in a terminal.
+
+---
+
+## Credits
+
+- Maintained by **Amr Khaled Ahmed**
+- Original plugin by **muadz**
+- Quran reciter metadata and audio provided by [mp3quran.net](https://www.mp3quran.net/)
+- Community plugin for [Dank Material Shell](https://github.com/AvengeMedia/DankMaterialShell)
