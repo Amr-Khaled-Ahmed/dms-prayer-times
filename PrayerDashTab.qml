@@ -723,7 +723,7 @@ DashTabComponent {
                     height: root.reciterResultsHeight
                     visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length > 0
 
-                    ListView {
+                    DListView {
                         anchors.fill: parent
                         anchors.margins: Theme.spacingXS
                         clip: true
@@ -781,7 +781,7 @@ DashTabComponent {
                     width:  parent.width
                     height: root.surahCardHeight
 
-                    ListView {
+                    DListView {
                         anchors.fill:    parent
                         anchors.margins: Theme.spacingXS
                         clip:            true

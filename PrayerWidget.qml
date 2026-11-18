@@ -498,7 +498,7 @@ PluginComponent {
             spacing: root.iconOnly ? 0 : Theme.spacingXS
             rightPadding: root.iconOnly ? 0 : Theme.spacingS
 
-            DankIcon {
+            DIcon {
                 name: root.getPrayerIcon(root.currName)
                 size: Theme.iconSizeSmall + Theme.spacingXXS
                 color: Theme.primary
@@ -539,7 +539,7 @@ PluginComponent {
         Column {
             spacing: Theme.spacingXXS
 
-            DankIcon {
+            DIcon {
                 name: root.getPrayerIcon(root.currName)
                 size: Theme.iconSizeSmall + Theme.spacingXXS
                 color: Theme.surfaceText
@@ -603,7 +603,7 @@ PluginComponent {
                                ? Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.12)
                                : root.subtleBg
 
-                        DankIcon {
+                        DIcon {
                             name: "refresh"
                             size: Theme.iconSizeSmall + Theme.spacingXS
                             color: Theme.surfaceVariantText
@@ -755,7 +755,7 @@ PluginComponent {
                                     anchors.left: parent.left
                                     anchors.verticalCenter: parent.verticalCenter
 
-                                    DankIcon {
+                                    DIcon {
                                         name: modelData.icon
                                         size: Theme.iconSize
                                         color: isNext ? root.accentColor : (isCurr ? Theme.surfaceText : Theme.surfaceVariantText)
@@ -825,7 +825,7 @@ PluginComponent {
                         color: Theme.surfaceVariantText
                     }
 
-                    ListView {
+                    DListView {
                         width: parent.width
                         height: root.reciterListHeight
                         visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length > 0
@@ -898,7 +898,7 @@ PluginComponent {
                             width: Theme.spacingXL; height: Theme.spacingXL; radius: width / 2
                             color: root.subtleBg
 
-                            DankIcon {
+                            DIcon {
                                 name: "refresh"
                                 size: Theme.iconSizeSmall
                                 color: Theme.surfaceVariantText
@@ -914,7 +914,7 @@ PluginComponent {
                     }
 
                     // Surah list
-                    ListView {
+                    DListView {
                         width: parent.width
                         height: root.surahListHeight
                         clip: true
@@ -955,7 +955,7 @@ PluginComponent {
                                     color: isPlaying ? root.accentColor : Theme.surfaceText
                                 }
 
-                                DankIcon {
+                                DIcon {
                                     anchors.verticalCenter: parent.verticalCenter
                                     name: isPlaying ? "stop" : "play_arrow"
                                     size: Theme.iconSizeSmall + Theme.spacingXS
