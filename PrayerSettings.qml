@@ -105,21 +105,21 @@ PluginSettings {
                 StringSetting {
                     settingKey: "latitude"
                     label: "Latitude"
-                    description: "Decimal degrees, e.g. 51.5074 or -33.8688. Positive = North, negative = South."
+                    description: "Decimal degrees from -90 to 90, e.g. 51.5074 or -33.8688. Positive = North, negative = South."
                     defaultValue: ""
                 }
 
                 StringSetting {
                     settingKey: "longitude"
                     label: "Longitude"
-                    description: "Decimal degrees, e.g. -0.1278 or 151.2093. Positive = East, negative = West."
+                    description: "Decimal degrees from -180 to 180, e.g. -0.1278 or 151.2093. Positive = East, negative = West."
                     defaultValue: ""
                 }
 
                 StringSetting {
                     settingKey: "timeZoneOffset"
                     label: "UTC Offset (Hours)"
-                    description: "Your local UTC offset, e.g. 3 for UTC+3, -5 for UTC-5."
+                    description: "UTC offset in hours (including optional fractions), from -14 to +14; e.g. 3 or -5.5."
                     defaultValue: ""
                 }
             }
@@ -149,7 +149,7 @@ PluginSettings {
             StringSetting {
                 settingKey: "notifyMinutes"
                 label: "Reminder (minutes before prayer)"
-                description: "How many minutes before prayer to send a notification"
+                description: "How many minutes before prayer to send a notification (0–1440)."
                 defaultValue: "15"
             }
         }

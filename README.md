@@ -1,5 +1,7 @@
 # Prayer Times
 
+![Prayer Times Dashboard screenshot](assets/prayer-times-dashboard.png)
+
 A DankMaterialShell plugin for daily Islamic prayer times. It provides a DankBar widget and popout, a Prayer Times tab and overview card in the DMS Dashboard, optional prayer notifications and Athan playback, and a Quran recitation browser/player.
 
 ## Features
@@ -17,7 +19,7 @@ A DankMaterialShell plugin for daily Islamic prayer times. It provides a DankBar
 
 ## How It Works
 
-Prayer times are calculated locally using the `salat` Python library with the **Egyptian General Authority** method and standard Asr calculation. The plugin reads `cache.json` as soon as the Dashboard tab or bar widget opens, so previously calculated timings appear immediately. It recalculates on startup, after location settings change, and every hour, then updates the cache. If the location is not configured, saved timings remain visible with a reminder to configure a location instead of leaving the tab stuck on a loading screen. The Hijri date is calculated locally with the Kuwaiti algorithm.
+Prayer times are calculated locally using the `salat` Python library with the **Egyptian General Authority** method and standard Asr calculation. The plugin reads its local `cache.json` as soon as the Dashboard tab or bar widget opens, so previously calculated timings appear immediately. It recalculates on startup, after location settings change, and every hour, then updates the cache. The cache and fetched reciter list are generated locally and excluded from Git. If the location is not configured, saved timings remain visible with a reminder to configure a location instead of leaving the tab stuck on a loading screen. The Hijri date is calculated locally with the Kuwaiti algorithm.
 
 **Location** comes from Settings → Plugins → Prayer Times → Location & Timezone:
 - **Manual (default)**: enter your latitude, longitude, and UTC offset. The fields are blank on a fresh install, so set all three before new calculations can run. Existing cached times can still be displayed; manual calculations work offline.
@@ -79,7 +81,9 @@ Open Settings → Plugins → Prayer Times to configure:
 | Icon Only Mode | Show only the prayer icon in the bar | Off |
 | Show Seconds | Show seconds in the countdown timer | Off |
 | Auto Detect Location | Resolve coordinates via IP-based geolocation instead of manual entry | Off |
-| Latitude / Longitude / UTC Offset | Manual coordinates, used only when Auto Detect Location is off | Empty — must be set manually |
+| Latitude | Manual latitude in decimal degrees, from -90 to 90 | Empty — must be set manually |
+| Longitude | Manual longitude in decimal degrees, from -180 to 180 | Empty — must be set manually |
+| UTC Offset | Manual UTC offset in hours, from -14 to +14 (fractional offsets supported) | Empty — must be set manually |
 | Reminder (minutes) | How many minutes before prayer to send a notification | 15 |
 | Play Athan Sound | Play an audio file when each prayer time starts | Off |
 | Athan Sound (file path or URL) | Local `.mp3`/`.ogg`/`.wav` path, or a direct `http(s)` link | Empty |
@@ -90,7 +94,7 @@ The Dashboard also has plugin options:
 | Dashboard option | Description | Default |
 |---|---|---|
 | 12-hour format | Display Dashboard prayer times in 12-hour format | Off |
-| Show Quran tab in dashboard | Show or hide the Quran section in the Dashboard tab | On |
+| Show Quran section | Show or hide the Quran section in the Prayer Times Dashboard tab | On |
 
 ### Using the Quran tab
 
@@ -101,7 +105,7 @@ The Dashboard also has plugin options:
 
 ### Setting an Athan sound
 
-The repository includes `assets/athan.mp3`; you can use it or select another recording. Check the recording's license before redistribution. Other sources that offer free-to-use recordings include:
+No audio recording is bundled. Add an Athan recording that you have permission to use to `assets/athan.mp3`, or configure another file/URL. The `.gitignore` excludes `assets/athan.mp3` by default so a personal or unlicensed recording is not accidentally uploaded. Only remove that ignore rule if you have verified the recording's redistribution license. Sources that offer free-to-use recordings include:
 
 - **[Pixabay – Azan sound effects](https://pixabay.com/sound-effects/search/azan/)** — royalty-free, no attribution required, straightforward MP3 download. Easiest option to stay copyright-safe.
 - **[aladhan.com/download-adhans](https://aladhan.com/download-adhans)** — several full Adhan recordings for personal use, including the Fajr version.
@@ -111,8 +115,8 @@ Always check the license on the specific file before redistribution; "free downl
 
 Once you have a file:
 
-1. Put it in this plugin's `assets/` folder, or use the included `assets/athan.mp3`.
-2. In Settings → Plugins → Prayer Times → Athan Sound, enter `assets/athan.mp3` to use the included file. Relative paths resolve from the plugin directory.
+1. Put your licensed recording in this plugin's `assets/` folder.
+2. In Settings → Plugins → Prayer Times → Athan Sound, enter its path (for example `assets/athan.mp3`). Relative paths resolve from the plugin directory.
 3. Alternatively, use any local absolute path (`/home/you/Sounds/athan.mp3`) or a direct streaming URL.
 
 ## Location & Privacy
@@ -130,11 +134,13 @@ prayerTimes/
 ├── PrayerSettings.qml   — settings panel
 ├── get_times.py         — Python script for offline prayer-time calculation
 ├── fetch_reciters.py    — Python script that caches the reciter list from mp3quran.net
-├── cache.json           — daily prayer-times cache
-├── reciters.json        — cached Quran reciter/riwayah list
-├── assets/athan.mp3     — bundled Athan audio (select it in settings to enable playback)
+├── .gitignore           — excludes generated caches, local credentials, and optional audio
+├── assets/
+│   └── prayer-times-dashboard.png — Dashboard screenshot
 └── icon.svg             — plugin icon
 ```
+
+`cache.json` and `reciters.json` are created locally when needed and are intentionally not committed.
 
 ## Compatibility
 

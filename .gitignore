@@ -1,0 +1,19 @@
+# Generated runtime data; each installation fetches/calculates its own.
+cache.json
+reciters.json
+
+# Python bytecode and local environments.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local configuration and credentials.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Optional audio must only be tracked when its redistribution license is known.
+assets/athan.mp3

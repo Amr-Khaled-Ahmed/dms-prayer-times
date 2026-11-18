@@ -4,6 +4,7 @@
   "description": "Offline Islamic prayer times, with an Athan sound at prayer time and a Quran recitation browser/player",
   "version": "1.5.0",
   "author": "zeroaccess",
+  "requires_dms": ">=1.2.0",
   "icon": "mosque",
   "type": "composite",
   "capabilities": ["dankbar-widget", "dash-tab", "dash-card"],
@@ -35,10 +36,10 @@
       },
       {
         "key": "showQuranInDash",
-        "text": "Show Quran tab in dashboard",
+        "text": "Show Quran section",
         "type": "toggle",
         "def": true,
-        "description": "Adds a Quran section to the Prayer Times dashboard tab"
+        "description": "Show or hide the Quran recitation section in the Prayer Times Dashboard tab"
       }
     ]
   },

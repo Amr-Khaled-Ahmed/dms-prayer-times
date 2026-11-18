@@ -3,6 +3,7 @@
 // This file is the DashTabComponent surface; it reads pluginData directly.
 
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Common
@@ -475,18 +476,22 @@ DashTabComponent {
             width:   parent.width
             height:  prayerList.implicitHeight + Theme.spacingM * 2
 
-            Column {
+            GridLayout {
                 id: prayerList
-                anchors.fill:    parent
-                anchors.margins: Theme.spacingM
-                spacing:         Theme.spacingXS
+                x: Theme.spacingM
+                y: Theme.spacingM
+                width: parent.width - Theme.spacingM * 2
+                columns: width >= 480 ? 2 : 1
+                columnSpacing: Theme.spacingS
+                rowSpacing: Theme.spacingXS
 
                 StyledText {
                     text: "Today's schedule"
                     font.pixelSize: Theme.fontSizeSmall
                     font.weight: Font.Bold
                     color: Theme.surfaceVariantText
-                    width: parent.width
+                    Layout.fillWidth: true
+                    Layout.columnSpan: prayerList.columns
                 }
 
                 Repeater {
@@ -500,8 +505,9 @@ DashTabComponent {
                         { label:"Isha",    time:root.isha,    icon:"bedtime"     }
                     ]
                     delegate: Item {
-                        width:  prayerList.width
-                        height: 36
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: (prayerList.width - prayerList.columnSpacing * (prayerList.columns - 1)) / prayerList.columns
+                        Layout.preferredHeight: 36
 
                         readonly property bool isNext: modelData.label === root.nextName
                         readonly property bool isCurr: modelData.label === root.currName
