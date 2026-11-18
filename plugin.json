@@ -2,10 +2,45 @@
   "id": "prayerTimes",
   "name": "Prayer Times",
   "description": "Offline Islamic prayer times, with an Athan sound at prayer time and a Quran recitation browser/player",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "author": "zeroaccess",
   "icon": "mosque",
-  "component": "./PrayerWidget.qml",
+  "type": "composite",
+  "capabilities": ["dankbar-widget", "dash-tab", "dash-card"],
+  "components": {
+    "widget":   "./PrayerWidget.qml",
+    "dash":     "./PrayerDashTab.qml",
+    "dashCard": "./PrayerDashCard.qml"
+  },
   "settings": "./PrayerSettings.qml",
-  "permissions": ["settings_read", "settings_write", "state_read", "state_write", "process"]
+  "dash": {
+    "title": "Prayer Times",
+    "icon": "mosque",
+    "card": {
+      "title": "Prayer Times",
+      "icon": "mosque",
+      "w": 2,
+      "h": 2,
+      "minW": 2,
+      "minH": 1,
+      "maxW": 4,
+      "maxH": 3
+    },
+    "options": [
+      {
+        "key": "use12H",
+        "text": "12-hour format",
+        "type": "toggle",
+        "def": false
+      },
+      {
+        "key": "showQuranInDash",
+        "text": "Show Quran tab in dashboard",
+        "type": "toggle",
+        "def": true,
+        "description": "Adds a Quran section to the Prayer Times dashboard tab"
+      }
+    ]
+  },
+  "permissions": ["settings_read", "settings_write", "process"]
 }

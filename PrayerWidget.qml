@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.Common
 import qs.Services
 import qs.Widgets
+import qs.DCommon.Widgets
 import qs.Modules.Plugins
 
 PluginComponent {
@@ -58,6 +59,8 @@ PluginComponent {
     property bool showQuranPanel: false
     property var reciters: []
     property int selectedReciterIndex: 0
+    property string reciterSearch: ""
+    property string reciterStatus: ""
     property int playingSurah: -1
     property bool quranPlaying: false
     property bool fetchingReciters: false
@@ -144,7 +147,9 @@ PluginComponent {
                         }
                     }
                     processPrayerData(fakeData)
-                } catch(e) {}
+                } catch(e) {
+                    console.warn("Prayer Times: couldn't parse cached schedule:", e)
+                }
             }
         }
     }
@@ -155,6 +160,7 @@ PluginComponent {
         command: ["python3", root.pluginDir + "fetch_reciters.py", root.pluginDir + "reciters.json"]
         onExited: function(code) {
             root.fetchingReciters = false
+            root.reciterStatus = code === 0 ? "" : "Couldn't refresh the reciter list."
             reciterCacheReader.running = true
         }
     }
@@ -172,7 +178,9 @@ PluginComponent {
                         root.reciters = obj.reciters
                         if (root.selectedReciterIndex >= root.reciters.length) root.selectedReciterIndex = 0
                     }
-                } catch(e) {}
+                } catch(e) {
+                    console.warn("Prayer Times: couldn't parse cached reciters:", e)
+                }
             }
         }
     }
@@ -180,8 +188,19 @@ PluginComponent {
     // Initialize when plugin service is ready
     onPluginServiceChanged: {
         if (pluginService) {
-            fetchPrayerTimes()
+            loadPluginData()
+            cacheReader.running = true
+            Qt.callLater(root.fetchPrayerTimes)
             reciterCacheReader.running = true // pick up any previously cached reciter list
+        }
+    }
+
+    Connections {
+        target: SettingsData
+        function onPluginSettingsChanged() {
+            if (!root.pluginService) return
+            root.loadPluginData()
+            Qt.callLater(root.fetchPrayerTimes)
         }
     }
 
@@ -229,8 +248,10 @@ PluginComponent {
             args.push("auto")
         } else {
             if (root.latitude === "" || root.longitude === "" || root.timeZoneOffset === "") {
-                console.warn("Prayer Times: manual location is enabled but lat/lon/UTC offset " +
-                              "are not fully set — open plugin settings to fill them in.")
+                cacheReader.running = true
+                if (SettingsData.pluginSettings[root.pluginId] !== undefined)
+                    console.warn("Prayer Times: manual location is enabled but lat/lon/UTC offset " +
+                                  "are not fully set — open plugin settings to fill them in.")
                 return
             }
             args.push("manual")
@@ -285,13 +306,22 @@ PluginComponent {
     function fetchReciters() {
         if (root.fetchingReciters) return
         root.fetchingReciters = true
+        root.reciterStatus = ""
         reciterFetcher.running = true
     }
 
-    function cycleReciter(dir) {
-        if (root.reciters.length === 0) return
-        var n = root.reciters.length
-        root.selectedReciterIndex = ((root.selectedReciterIndex + dir) % n + n) % n
+    function filteredReciters() {
+        var query = root.reciterSearch.trim().toLowerCase()
+        if (query === "") return []
+        var matches = []
+        for (var i = 0; i < root.reciters.length; i++) {
+            var reciter = root.reciters[i]
+            var searchable = (String(reciter.name || "") + " "
+                              + String(reciter.moshaf_name || "")).toLowerCase()
+            if (searchable.includes(query))
+                matches.push({ index: i, reciter: reciter })
+        }
+        return matches
     }
 
     function playSurah(reciterIdx, surahNum) {
@@ -459,9 +489,8 @@ PluginComponent {
                // text: root.nextTime !== "" ? (root.nextName + " " + root.formatTime(root.nextTime)) : "Loading..."
               text: root.nextTime !== "" ? root.nextName : "Loading..."
                font.pixelSize: Theme.fontSizeSmall
-                color: Theme.secondary
-                anchors.verticalCenter: parent.verticalCenter
-                width: root.iconOnly ? 0 : implicitWidth
+              color: Theme.secondary
+              anchors.verticalCenter: parent.verticalCenter
             }
 
             StyledText {
@@ -471,7 +500,6 @@ PluginComponent {
                 color: Theme.surfaceVariantText
                 leftPadding: 2; rightPadding: 2
                 anchors.verticalCenter: parent.verticalCenter
-                width: (!root.iconOnly && root.nextTime !== "") ? implicitWidth : 0
             }
 
             StyledText {
@@ -481,7 +509,6 @@ PluginComponent {
                 font.weight: root.isUrgent ? Font.Bold : Font.Normal
                 color: root.isUrgent ? root.accentColor : Theme.secondary
                 anchors.verticalCenter: parent.verticalCenter
-                width: (!root.iconOnly && root.nextTime !== "") ? implicitWidth : 0
             }
         }
     }
@@ -745,63 +772,88 @@ PluginComponent {
                     spacing: Theme.spacingS
                     visible: root.showQuranPanel && root.quranEnabled
 
-                    // Reciter picker
-                    Item {
+                    StyledText {
                         width: parent.width
-                        height: 32
+                        text: root.reciters.length > 0
+                              ? "Selected · " + root.reciters[root.selectedReciterIndex].name
+                                + " — " + root.reciters[root.selectedReciterIndex].moshaf_name
+                              : (root.fetchingReciters ? "Fetching reciters..."
+                                 : root.reciterStatus || "No reciter list loaded")
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.weight: Font.Medium
+                        color: Theme.surfaceText
+                        elide: Text.ElideRight
+                    }
 
-                        Row {
-                            anchors.fill: parent
-                            spacing: Theme.spacingXS
+                    DTextField {
+                        width: parent.width
+                        height: 36
+                        placeholderText: root.reciters.length > 0
+                                ? "Search reciters or riwayah..."
+                                : "Reciter list is not available"
+                        enabled: root.reciters.length > 0
+                        text: root.reciterSearch
+                        onTextChanged: root.reciterSearch = text
+                    }
+
+                    StyledText {
+                        width: parent.width
+                        visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length === 0
+                        text: "No matching reciters"
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                    }
+
+                    ListView {
+                        width: parent.width
+                        height: 112
+                        visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length > 0
+                        clip: true
+                        model: root.filteredReciters()
+
+                        delegate: Item {
+                            width: ListView.view.width
+                            height: 44
 
                             Rectangle {
-                                width: 28; height: 28; radius: 14
-                                color: root.subtleBg
+                                anchors.fill: parent
+                                radius: 6
+                                color: reciterResultMouse.containsMouse ? root.subtleBg : "transparent"
+                            }
+
+                            Column {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
+                                anchors.leftMargin: Theme.spacingS
+                                anchors.rightMargin: Theme.spacingS
+                                spacing: 2
 
-                                DankIcon {
-                                    name: "chevron_left"
-                                    size: Theme.iconSize - 6
-                                    color: Theme.surfaceVariantText
-                                    anchors.centerIn: parent
+                                StyledText {
+                                    width: parent.width
+                                    text: modelData.reciter.name
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.weight: Font.Medium
+                                    color: Theme.surfaceText
+                                    elide: Text.ElideRight
                                 }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.cycleReciter(-1)
+                                StyledText {
+                                    width: parent.width
+                                    text: modelData.reciter.moshaf_name
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.surfaceVariantText
+                                    elide: Text.ElideRight
                                 }
                             }
 
-                            StyledText {
-                                width: parent.width - 64
-                                height: 28
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                                text: root.reciters.length > 0
-                                      ? (root.reciters[root.selectedReciterIndex].name + " — " + root.reciters[root.selectedReciterIndex].moshaf_name)
-                                      : (root.fetchingReciters ? "Fetching reciters..." : "No reciters cached")
-                                font.pixelSize: Theme.fontSizeSmall
-                                color: Theme.surfaceText
-                            }
-
-                            Rectangle {
-                                width: 28; height: 28; radius: 14
-                                color: root.subtleBg
-                                anchors.verticalCenter: parent.verticalCenter
-
-                                DankIcon {
-                                    name: "chevron_right"
-                                    size: Theme.iconSize - 6
-                                    color: Theme.surfaceVariantText
-                                    anchors.centerIn: parent
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.cycleReciter(1)
+                            MouseArea {
+                                id: reciterResultMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.selectedReciterIndex = modelData.index
+                                    root.reciterSearch = ""
                                 }
                             }
                         }
