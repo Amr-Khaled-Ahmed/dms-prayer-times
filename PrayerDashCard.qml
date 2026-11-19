@@ -45,6 +45,8 @@ DashCardComponent {
         let u = Qt.resolvedUrl(".").toString()
         return u.replace("file://", "")
     }
+    readonly property string cacheDir: Paths.strip(Paths.cache) + "/prayerTimesEnhanced"
+    readonly property string cachePath: cacheDir + "/cache.json"
 
     clickable: true
 
@@ -59,7 +61,7 @@ DashCardComponent {
 
     FileView {
         id: cacheView
-        path: root.pluginDir + "cache.json"
+        path: root.cachePath
         watchChanges: true
         blockLoading: false
         printErrors: false
@@ -89,7 +91,10 @@ DashCardComponent {
         onTriggered: root.fetch()
     }
 
-    Component.onCompleted: root.fetch()
+    Component.onCompleted: {
+        Paths.mkdir(root.cacheDir)
+        root.fetch()
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function fetch() {
@@ -98,7 +103,7 @@ DashCardComponent {
         if (!loc && (!pluginData.latitude || !pluginData.longitude || !pluginData.timeZoneOffset))
             return cacheView.reload()  // at minimum try the existing cache
         root.fetching = true
-        const args = ["python3", root.pluginDir + "get_times.py", root.pluginDir + "cache.json"]
+        const args = ["python3", root.pluginDir + "get_times.py", root.cachePath]
         if (loc) args.push("auto")
         else     args.push("manual", pluginData.latitude, pluginData.longitude, pluginData.timeZoneOffset)
         pyRunner.command = args

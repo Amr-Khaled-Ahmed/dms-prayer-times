@@ -10,6 +10,7 @@ geolocation (no local config needed, nothing hardcoded). "manual" mode
 uses the lat/lon/UTC-offset passed in from the plugin's settings.
 """
 
+import os
 import sys
 import json
 import datetime
@@ -151,6 +152,7 @@ def main():
         "date": str(date),
     }
 
+    os.makedirs(os.path.dirname(os.path.abspath(cache_path)), exist_ok=True)
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
 

@@ -14,6 +14,7 @@ Usage:
     python3 fetch_reciters.py <cache_path>
 """
 
+import os
 import sys
 import json
 import urllib.request
@@ -30,7 +31,7 @@ def fetch(cache_path):
     for r in raw.get("reciters", []):
         for m in r.get("moshaf", []):
             server = m.get("server", "")
-            if not server:
+            if not isinstance(server, str) or not server.startswith("https://"):
                 continue
             reciters.append(
                 {
@@ -45,6 +46,7 @@ def fetch(cache_path):
     # Sort alphabetically (Arabic) by reciter name for a predictable browsing order
     reciters.sort(key=lambda x: x["name"])
 
+    os.makedirs(os.path.dirname(os.path.abspath(cache_path)), exist_ok=True)
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump({"reciters": reciters}, f, ensure_ascii=False)
 

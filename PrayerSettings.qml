@@ -80,7 +80,7 @@ PluginSettings {
             }
 
             StyledText {
-                visible: pluginData.autoLocation === true
+                visible: autoLocToggle.value
                 text: "Manual latitude/longitude/UTC-offset fields are hidden while Auto Detect Location is on."
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.surfaceVariantText
@@ -92,7 +92,7 @@ PluginSettings {
             Column {
                 width: parent.width
                 spacing: Theme.spacingM
-                visible: pluginData.autoLocation !== true
+                visible: !autoLocToggle.value
 
                 StyledText {
                     text: "Enter your own coordinates — nothing is pre-filled."

@@ -58,7 +58,7 @@ Prayer times are calculated locally on your machine. Manual coordinates work wit
 - Browse reciters and riwayah variants from mp3quran.net.
 - Searchable reciter picker in both the widget popout and the Dashboard tab.
 - Stream any surah through the first available local player: `mpv`, `ffplay`, or `cvlc`.
-- Reciter list is cached in `reciters.json` and can be refreshed on demand.
+- Reciter list is cached under `~/.cache/dms/prayerTimesEnhanced/reciters.json` and can be refreshed on demand.
 - The Quran section can be hidden entirely from the Dashboard tab.
 
 ### Customizable Settings
@@ -152,10 +152,10 @@ hl.bind(
 1. On startup, on location changes, and hourly, the plugin runs `get_times.py`.
 2. In **manual** mode it uses your saved latitude, longitude, and UTC offset and calculates offline.
 3. In **auto** mode it resolves approximate coordinates through `ip-api.com`, then calculates locally.
-4. Results are written to `cache.json` and rendered immediately by the widget and Dashboard.
-5. The Quran panel fetches the reciter list from mp3quran.net and caches it in `reciters.json`.
+4. Results are written to `~/.cache/dms/prayerTimesEnhanced/cache.json` and rendered immediately by the widget and Dashboard.
+5. The Quran panel fetches the reciter list from mp3quran.net and caches it in `~/.cache/dms/prayerTimesEnhanced/reciters.json`.
 
-`cache.json`, `reciters.json`, and `__pycache__/` are generated locally and excluded from Git. Your personal Athan recording in `assets/athan.mp3` is also excluded by default so unlicensed audio is not published accidentally.
+Cached schedules, reciter lists, and `__pycache__/` are generated locally and excluded from Git. Your personal Athan recording in `assets/athan.mp3` is also excluded by default so unlicensed audio is not published accidentally.
 
 ### Setting an Athan sound
 

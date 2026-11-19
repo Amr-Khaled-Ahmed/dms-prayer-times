@@ -79,6 +79,9 @@ DashTabComponent {
         let u = Qt.resolvedUrl(".").toString()
         return u.replace("file://", "")
     }
+    readonly property string cacheDir: Paths.strip(Paths.cache) + "/prayerTimesEnhanced"
+    readonly property string cachePath: cacheDir + "/cache.json"
+    readonly property string reciterCachePath: cacheDir + "/reciters.json"
 
     // ── Surah name list (Arabic) ────────────────────────────────────────────
     readonly property var surahNames: [
@@ -117,7 +120,7 @@ DashTabComponent {
 
     FileView {
         id: cacheView
-        path: root.pluginDir + "cache.json"
+        path: root.cachePath
         watchChanges: true
         blockLoading: false
         printErrors: false
@@ -151,7 +154,7 @@ DashTabComponent {
 
     Process {
         id: reciterFetcher
-        command: ["python3", root.pluginDir + "fetch_reciters.py", root.pluginDir + "reciters.json"]
+        command: ["python3", root.pluginDir + "fetch_reciters.py", root.reciterCachePath]
         onExited: function(code) {
             root.fetchingReciters = false
             root.reciterStatus = code === 0 ? "" : "Couldn't refresh the reciter list."
@@ -161,7 +164,7 @@ DashTabComponent {
 
     FileView {
         id: reciterCacheView
-        path: root.pluginDir + "reciters.json"
+        path: root.reciterCachePath
         watchChanges: true
         blockLoading: false
         printErrors: false
@@ -169,8 +172,13 @@ DashTabComponent {
         onLoaded: {
             try {
                 const obj = JSON.parse(reciterCacheView.text())
-                if (obj.reciters && obj.reciters.length > 0) {
-                    root.reciters = obj.reciters
+                const safeReciters = Array.isArray(obj.reciters)
+                    ? obj.reciters.filter(function(r) {
+                        return r && typeof r.server === "string" && r.server.startsWith("https://")
+                    })
+                    : []
+                if (safeReciters.length > 0) {
+                    root.reciters = safeReciters
                     if (root.selectedReciter >= root.reciters.length)
                         root.selectedReciter = 0
                 }
@@ -200,6 +208,7 @@ DashTabComponent {
     }
 
     Component.onCompleted: {
+        Paths.mkdir(root.cacheDir)
         cacheView.reload()
         root.fetchPrayerTimes()
         reciterCacheView.reload()
@@ -228,7 +237,7 @@ DashTabComponent {
         }
         root.statusMessage = "Updating prayer times…"
         root.fetching = true
-        const args = ["python3", root.pluginDir + "get_times.py", root.pluginDir + "cache.json"]
+        const args = ["python3", root.pluginDir + "get_times.py", root.cachePath]
         if (loc) {
             args.push("auto")
         } else {
@@ -358,11 +367,15 @@ DashTabComponent {
     }
     function playSurah(ridx, num) {
         if (!root.reciters.length) return
-        const url = root.reciters[ridx].server + pad3(num) + ".mp3"
+        const reciter = root.reciters[ridx]
+        if (!reciter || typeof reciter.server !== "string"
+                || !reciter.server.startsWith("https://"))
+            return
+        const url = reciter.server + pad3(num) + ".mp3"
         quranPlayer.command = ["sh", "-c",
-            "if command -v mpv >/dev/null 2>&1; then exec mpv --no-video --really-quiet \"$0\"; " +
-            "elif command -v ffplay >/dev/null 2>&1; then exec ffplay -nodisp -autoexit -loglevel quiet \"$0\"; " +
-            "elif command -v cvlc >/dev/null 2>&1; then exec cvlc --play-and-exit -q \"$0\"; " +
+            "if command -v mpv >/dev/null 2>&1; then exec mpv --no-video --really-quiet -- \"$0\"; " +
+            "elif command -v ffplay >/dev/null 2>&1; then exec ffplay -nodisp -autoexit -loglevel quiet -- \"$0\"; " +
+            "elif command -v cvlc >/dev/null 2>&1; then exec cvlc --play-and-exit -q -- \"$0\"; " +
             "else dms notify -a 'Prayer Times Enhanced' 'No audio player found — install mpv, ffplay, or cvlc'; fi", url]
         quranPlayer.running = false; quranPlayer.running = true
         root.playingSurah = num; root.quranPlaying = true

@@ -60,6 +60,43 @@ PluginComponent {
         let fullUrl = Qt.resolvedUrl(".").toString()
         return fullUrl.replace("file://", "")
     }
+    readonly property string cacheDir: Paths.strip(Paths.cache) + "/prayerTimesEnhanced"
+    readonly property string cachePath: cacheDir + "/cache.json"
+    readonly property string reciterCachePath: cacheDir + "/reciters.json"
+
+    // Only one widget instance may send reminders/Athan; otherwise every bar
+    // and monitor would fire the same notification and play the same audio.
+    property string notifyOwnerToken: ""
+    property bool isNotifyOwner: false
+
+    function claimNotifyOwner() {
+        if (!pluginService || !root.pluginId || root.notifyOwnerToken === "") return
+        let owner = PluginService.getGlobalVar(root.pluginId, "notifyOwner", "")
+        if (owner === "") {
+            PluginService.setGlobalVar(root.pluginId, "notifyOwner", root.notifyOwnerToken)
+            owner = root.notifyOwnerToken
+        }
+        root.isNotifyOwner = owner === root.notifyOwnerToken
+    }
+
+    Connections {
+        target: PluginService
+        function onGlobalVarChanged(pid, name) {
+            if (pid === root.pluginId && name === "notifyOwner")
+                Qt.callLater(root.claimNotifyOwner)
+        }
+    }
+
+    Component.onCompleted: {
+        Paths.mkdir(root.cacheDir)
+        root.notifyOwnerToken = root.widgetInstanceId || ("widget-" + Math.random().toString(36).slice(2))
+        Qt.callLater(root.claimNotifyOwner)
+    }
+    Component.onDestruction: {
+        if (pluginService && root.notifyOwnerToken !== ""
+                && PluginService.getGlobalVar(root.pluginId, "notifyOwner", "") === root.notifyOwnerToken)
+            PluginService.setGlobalVar(root.pluginId, "notifyOwner", "")
+    }
 
     // Internal state
     property bool fetching: false
@@ -143,7 +180,7 @@ PluginComponent {
     // Cache reader
     FileView {
         id: cacheView
-        path: root.pluginDir + "cache.json"
+        path: root.cachePath
         watchChanges: true
         blockLoading: false
         printErrors: false
@@ -179,7 +216,7 @@ PluginComponent {
     // Reciter list fetcher (hits mp3quran.net once, caches to reciters.json)
     Process {
         id: reciterFetcher
-        command: ["python3", root.pluginDir + "fetch_reciters.py", root.pluginDir + "reciters.json"]
+        command: ["python3", root.pluginDir + "fetch_reciters.py", root.reciterCachePath]
         onExited: function(code) {
             root.fetchingReciters = false
             root.reciterStatus = code === 0 ? "" : "Couldn't refresh the reciter list."
@@ -190,7 +227,7 @@ PluginComponent {
     // Reciter cache reader
     FileView {
         id: reciterCacheView
-        path: root.pluginDir + "reciters.json"
+        path: root.reciterCachePath
         watchChanges: true
         blockLoading: false
         printErrors: false
@@ -198,8 +235,13 @@ PluginComponent {
         onLoaded: {
             try {
                 var obj = JSON.parse(reciterCacheView.text())
-                if (obj.reciters && obj.reciters.length > 0) {
-                    root.reciters = obj.reciters
+                const safeReciters = Array.isArray(obj.reciters)
+                    ? obj.reciters.filter(function(r) {
+                        return r && typeof r.server === "string" && r.server.startsWith("https://")
+                    })
+                    : []
+                if (safeReciters.length > 0) {
+                    root.reciters = safeReciters
                     if (root.selectedReciterIndex >= root.reciters.length) root.selectedReciterIndex = 0
                 }
             } catch(e) {
@@ -212,6 +254,7 @@ PluginComponent {
     onPluginServiceChanged: {
         if (pluginService) {
             loadPluginData()
+            Qt.callLater(root.claimNotifyOwner)
             cacheView.reload()
             Qt.callLater(root.fetchPrayerTimes)
             reciterCacheView.reload() // pick up any previously cached reciter list
@@ -256,7 +299,7 @@ PluginComponent {
     function fetchPrayerTimes() {
         if (root.fetching) return
 
-        var args = ["python3", root.pluginDir + "get_times.py", root.pluginDir + "cache.json"]
+        var args = ["python3", root.pluginDir + "get_times.py", root.cachePath]
 
         if (root.autoLocation) {
             args.push("auto")
@@ -283,9 +326,9 @@ PluginComponent {
     // Runs an audio file/URL through whichever player is installed (mpv, then ffplay, then cvlc)
     function playerCommandFor(target) {
         return ["sh", "-c",
-            "if command -v mpv >/dev/null 2>&1; then exec mpv --no-video --really-quiet \"$0\"; " +
-            "elif command -v ffplay >/dev/null 2>&1; then exec ffplay -nodisp -autoexit -loglevel quiet \"$0\"; " +
-            "elif command -v cvlc >/dev/null 2>&1; then exec cvlc --play-and-exit -q \"$0\"; " +
+            "if command -v mpv >/dev/null 2>&1; then exec mpv --no-video --really-quiet -- \"$0\"; " +
+            "elif command -v ffplay >/dev/null 2>&1; then exec ffplay -nodisp -autoexit -loglevel quiet -- \"$0\"; " +
+            "elif command -v cvlc >/dev/null 2>&1; then exec cvlc --play-and-exit -q -- \"$0\"; " +
             "else dms notify -a 'Prayer Times Enhanced' 'No audio player found — install mpv, ffplay, or cvlc'; fi",
             target]
     }
@@ -300,7 +343,7 @@ PluginComponent {
     }
 
     function playAthan() {
-        if (!root.playAthanSound || root.athanSoundPath === "") return
+        if (!root.isNotifyOwner || !root.playAthanSound || root.athanSoundPath === "") return
         athanPlayerProc.command = playerCommandFor(root.resolveAthanPath(root.athanSoundPath))
         athanPlayerProc.running = false
         athanPlayerProc.running = true
@@ -314,6 +357,9 @@ PluginComponent {
     }
 
     function surahAudioUrl(reciter, surahNum) {
+        if (!reciter || typeof reciter.server !== "string"
+                || !reciter.server.startsWith("https://"))
+            return ""
         return reciter.server + pad3(surahNum) + ".mp3"
     }
 
@@ -342,6 +388,7 @@ PluginComponent {
         if (root.reciters.length === 0) return
         var r = root.reciters[reciterIdx]
         var url = surahAudioUrl(r, surahNum)
+        if (url === "") return
         quranPlayerProc.command = playerCommandFor(url)
         quranPlayerProc.running = false
         quranPlayerProc.running = true
@@ -357,6 +404,7 @@ PluginComponent {
 
     // Notification functions
     function sendPrayerNotification() {
+        if (!root.isNotifyOwner) return
         var mins = Math.ceil(root.nextTotalSeconds / 60)
         prayerNotifyProc.command = [
             "dms", "notify", "-a", "Prayer Times Enhanced", "-u", "critical", "-i", iconPath,
@@ -366,6 +414,7 @@ PluginComponent {
     }
 
     function sendPrayerTimeNotification() {
+        if (!root.isNotifyOwner) return
         prayerNotifyProc.command = [
             "dms", "notify", "-a", "Prayer Times Enhanced", "-u", "critical", "-i", iconPath,
             "Time for " + root.nextName
