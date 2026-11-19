@@ -1,38 +1,101 @@
 import QtQuick
+import QtQuick.Layouts
 import qs.Common
 import qs.Widgets
+import qs.DCommon.Widgets
 import qs.Modules.Plugins
 
 PluginSettings {
     id: root
     pluginId: "prayerTimesEnhanced"
 
-    StyledText {
+    RowLayout {
         width: parent.width
-        text: "Prayer Times Settings"
-        font.pixelSize: Theme.fontSizeLarge
-        font.weight: Font.Bold
-        color: Theme.surfaceText
-    }
+        spacing: Theme.spacingM
 
-    // ── Display Settings ──
-    StyledRect {
-        width: parent.width
-        height: displayColumn.implicitHeight + Theme.spacingL * 2
-        radius: Theme.cornerRadius
-        color: Theme.surfaceContainerHigh
+        Rectangle {
+            Layout.preferredWidth: 48
+            Layout.preferredHeight: 48
+            radius: Theme.cornerRadiusM
+            color: Theme.withAlpha(Theme.primary, 0.14)
 
-        Column {
-            id: displayColumn
-            anchors.fill: parent
-            anchors.margins: Theme.spacingL
-            spacing: Theme.spacingM
+            DIcon {
+                anchors.centerIn: parent
+                name: "mosque"
+                size: Theme.iconSizeLarge
+                color: Theme.primary
+            }
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
 
             StyledText {
-                text: "Display"
-                font.pixelSize: Theme.fontSizeMedium
-                font.weight: Font.Bold
+                text: "Prayer Times Enhanced"
+                font.pixelSize: Theme.fontSizeLarge
+                font.weight: Theme.fontWeightBold
                 color: Theme.surfaceText
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                text: "Daily prayer schedule, Athan reminders, and Quran recitations."
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.surfaceVariantText
+                wrapMode: Text.WordWrap
+            }
+        }
+    }
+
+    DCard {
+        id: displayCard
+        width: parent.width
+        height: displayContent.implicitHeight + displayCard.pad * 2
+        pad: Theme.spacingL
+
+        Column {
+            id: displayContent
+            width: parent.width
+            spacing: Theme.spacingM
+
+            RowLayout {
+                width: parent.width
+                spacing: Theme.spacingM
+
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    radius: Theme.cornerRadiusS
+                    color: Theme.withAlpha(Theme.primary, 0.12)
+
+                    DIcon {
+                        anchors.centerIn: parent
+                        name: "tune"
+                        size: Theme.iconSizeSmall
+                        color: Theme.primary
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+
+                    StyledText {
+                        text: "Display"
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.weight: Theme.fontWeightBold
+                        color: Theme.surfaceText
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: "Control how the bar widget presents prayer information."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
 
             ToggleSetting {
@@ -51,24 +114,54 @@ PluginSettings {
         }
     }
 
-    // ── Location Settings ──
-    StyledRect {
+    DCard {
+        id: locationCard
         width: parent.width
-        height: locationColumn.implicitHeight + Theme.spacingL * 2
-        radius: Theme.cornerRadius
-        color: Theme.surfaceContainerHigh
+        height: locationContent.implicitHeight + locationCard.pad * 2
+        pad: Theme.spacingL
 
         Column {
-            id: locationColumn
-            anchors.fill: parent
-            anchors.margins: Theme.spacingL
+            id: locationContent
+            width: parent.width
             spacing: Theme.spacingM
 
-            StyledText {
-                text: "Location & Timezone"
-                font.pixelSize: Theme.fontSizeMedium
-                font.weight: Font.Bold
-                color: Theme.surfaceText
+            RowLayout {
+                width: parent.width
+                spacing: Theme.spacingM
+
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    radius: Theme.cornerRadiusS
+                    color: Theme.withAlpha(Theme.primary, 0.12)
+
+                    DIcon {
+                        anchors.centerIn: parent
+                        name: "location_on"
+                        size: Theme.iconSizeSmall
+                        color: Theme.primary
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+
+                    StyledText {
+                        text: "Location & Timezone"
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.weight: Theme.fontWeightBold
+                        color: Theme.surfaceText
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: "Use automatic geolocation or provide exact coordinates manually."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
 
             ToggleSetting {
@@ -80,26 +173,25 @@ PluginSettings {
             }
 
             StyledText {
+                width: parent.width
                 visible: autoLocToggle.value
-                text: "Manual latitude/longitude/UTC-offset fields are hidden while Auto Detect Location is on."
+                text: "Manual latitude, longitude, and UTC-offset fields are hidden while Auto Detect Location is on."
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.surfaceVariantText
                 wrapMode: Text.WordWrap
-                width: parent.width
             }
 
-            // Manual Location Inputs (visible whenever Auto Location is NOT explicitly enabled)
             Column {
                 width: parent.width
                 spacing: Theme.spacingM
                 visible: !autoLocToggle.value
 
                 StyledText {
+                    width: parent.width
                     text: "Enter your own coordinates — nothing is pre-filled."
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.surfaceVariantText
                     wrapMode: Text.WordWrap
-                    width: parent.width
                 }
 
                 StringSetting {
@@ -126,24 +218,54 @@ PluginSettings {
         }
     }
 
-    // ── Notifications Settings ──
-    StyledRect {
+    DCard {
+        id: notifyCard
         width: parent.width
-        height: notifyColumn.implicitHeight + Theme.spacingL * 2
-        radius: Theme.cornerRadius
-        color: Theme.surfaceContainerHigh
+        height: notifyContent.implicitHeight + notifyCard.pad * 2
+        pad: Theme.spacingL
 
         Column {
-            id: notifyColumn
-            anchors.fill: parent
-            anchors.margins: Theme.spacingL
+            id: notifyContent
+            width: parent.width
             spacing: Theme.spacingM
 
-            StyledText {
-                text: "Notifications"
-                font.pixelSize: Theme.fontSizeMedium
-                font.weight: Font.Bold
-                color: Theme.surfaceText
+            RowLayout {
+                width: parent.width
+                spacing: Theme.spacingM
+
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    radius: Theme.cornerRadiusS
+                    color: Theme.withAlpha(Theme.primary, 0.12)
+
+                    DIcon {
+                        anchors.centerIn: parent
+                        name: "notifications"
+                        size: Theme.iconSizeSmall
+                        color: Theme.primary
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+
+                    StyledText {
+                        text: "Notifications"
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.weight: Theme.fontWeightBold
+                        color: Theme.surfaceText
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: "Choose how early to be reminded before each prayer."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
 
             StringSetting {
@@ -155,30 +277,60 @@ PluginSettings {
         }
     }
 
-    // ── Athan Settings ──
-    StyledRect {
+    DCard {
+        id: athanCard
         width: parent.width
-        height: athanColumn.implicitHeight + Theme.spacingL * 2
-        radius: Theme.cornerRadius
-        color: Theme.surfaceContainerHigh
+        height: athanContent.implicitHeight + athanCard.pad * 2
+        pad: Theme.spacingL
 
         Column {
-            id: athanColumn
-            anchors.fill: parent
-            anchors.margins: Theme.spacingL
+            id: athanContent
+            width: parent.width
             spacing: Theme.spacingM
 
-            StyledText {
-                text: "Athan (Call to Prayer)"
-                font.pixelSize: Theme.fontSizeMedium
-                font.weight: Font.Bold
-                color: Theme.surfaceText
+            RowLayout {
+                width: parent.width
+                spacing: Theme.spacingM
+
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    radius: Theme.cornerRadiusS
+                    color: Theme.withAlpha(Theme.primary, 0.12)
+
+                    DIcon {
+                        anchors.centerIn: parent
+                        name: "volume_up"
+                        size: Theme.iconSizeSmall
+                        color: Theme.primary
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+
+                    StyledText {
+                        text: "Athan (Call to Prayer)"
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.weight: Theme.fontWeightBold
+                        color: Theme.surfaceText
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: "Play an audio file the moment each prayer time starts."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
 
             ToggleSetting {
                 settingKey: "playAthanSound"
                 label: "Play Athan Sound"
-                description: "Play an audio file the moment each prayer time starts."
+                description: "Enable audio playback at the start of each prayer."
                 defaultValue: false
             }
 
@@ -191,24 +343,54 @@ PluginSettings {
         }
     }
 
-    // ── Quran Settings ──
-    StyledRect {
+    DCard {
+        id: quranCard
         width: parent.width
-        height: quranColumn.implicitHeight + Theme.spacingL * 2
-        radius: Theme.cornerRadius
-        color: Theme.surfaceContainerHigh
+        height: quranContent.implicitHeight + quranCard.pad * 2
+        pad: Theme.spacingL
 
         Column {
-            id: quranColumn
-            anchors.fill: parent
-            anchors.margins: Theme.spacingL
+            id: quranContent
+            width: parent.width
             spacing: Theme.spacingM
 
-            StyledText {
-                text: "Quran Recitations"
-                font.pixelSize: Theme.fontSizeMedium
-                font.weight: Font.Bold
-                color: Theme.surfaceText
+            RowLayout {
+                width: parent.width
+                spacing: Theme.spacingM
+
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    radius: Theme.cornerRadiusS
+                    color: Theme.withAlpha(Theme.primary, 0.12)
+
+                    DIcon {
+                        anchors.centerIn: parent
+                        name: "menu_book"
+                        size: Theme.iconSizeSmall
+                        color: Theme.primary
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+
+                    StyledText {
+                        text: "Quran Recitations"
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.weight: Theme.fontWeightBold
+                        color: Theme.surfaceText
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: "Browse reciters and stream any surah from the widget popout."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
 
             ToggleSetting {
@@ -216,6 +398,14 @@ PluginSettings {
                 label: "Show Quran Tab in Popout"
                 description: "Adds a Quran tab to the widget popout to browse reciters and play any surah."
                 defaultValue: true
+            }
+
+            StyledText {
+                width: parent.width
+                text: "Reciter metadata and audio are provided by mp3quran.net. Playback requires mpv, ffplay, or cvlc."
+                font.pixelSize: Theme.fontSizeXSmall
+                color: Theme.surfaceVariantText
+                wrapMode: Text.WordWrap
             }
         }
     }

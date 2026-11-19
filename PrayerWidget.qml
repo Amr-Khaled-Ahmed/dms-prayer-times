@@ -5,6 +5,7 @@
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Common
@@ -32,8 +33,11 @@ PluginComponent {
     property string currName: ""
     property string nextName: ""
     property string nextTime: ""
+    property string prevTime: ""
     property int nextTimeSec: 0
     property int nextTotalSeconds: 0
+    property real periodProgress: 0
+    readonly property bool hasData: fajr !== "" && dhuhr !== "" && asr !== "" && maghrib !== "" && isha !== ""
 
     // Settings
     property bool iconOnly: pluginData.iconOnly ?? false
@@ -134,17 +138,12 @@ PluginComponent {
     readonly property bool isUrgent: nextTotalSeconds > 0 && nextTotalSeconds <= notifyThresholdSec
     readonly property color accentColor: Theme.primary
     readonly property color accentBg: Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.18)
-    readonly property color subtleBg: Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.05)
-    readonly property int popoutWidth: Theme.spacingXL * 10 + Theme.spacingL + Theme.spacingXS
-    readonly property int compactControlSize: Theme.spacingXL + Theme.spacingXS
-    readonly property int standardRowHeight: Theme.spacingXL + Theme.spacingM
-    readonly property int quranRowHeight: Theme.spacingXL + Theme.spacingL + Theme.spacingXS
-    readonly property int prayerLabelWidth: Theme.spacingXL * 2 + Theme.spacingL
-    readonly property int prayerTimeWidth: Theme.spacingXL * 3 - Theme.spacingXXS
-    readonly property int reciterListHeight: Theme.spacingXL * 4 + Theme.spacingL
-    readonly property int surahListHeight: Theme.spacingXL * 9 + Theme.spacingXS
-    readonly property int surahNumberWidth: Theme.spacingXL - Theme.spacingXXS
-    readonly property int surahTextInset: Theme.spacingXL * 3 + Theme.spacingS
+    popoutWidth: 380
+    readonly property int standardRowHeight: Theme.iconButtonSize
+    readonly property int quranRowHeight: 48
+    readonly property int reciterListHeight: 168
+    readonly property int surahListHeight: 336
+    readonly property int surahNumberWidth: 32
 
     // Notification process
     Process {
@@ -202,7 +201,7 @@ PluginComponent {
                         Sunset:  t[4]
                     },
                     date: {
-                        readable: obj.date || "",
+                        readable: root.formatGregorian(obj.date || ""),
                         hijri: obj.hijri || ""
                     }
                 }
@@ -443,6 +442,7 @@ PluginComponent {
         var diff = rawDiff
         if (diff < 0) diff += 86400
         root.nextTotalSeconds = Math.max(0, diff)
+        root.updateProgress()
 
         var urgent = diff > 0 && diff <= root.notifyThresholdSec
         if (urgent && !root._wasUrgent) sendPrayerNotification()
@@ -472,6 +472,13 @@ PluginComponent {
         return hours + ":" + minutes + " " + ampm
     }
 
+    function formatGregorian(value) {
+        if (!value) return ""
+        var d = new Date(String(value) + (String(value).length === 10 ? "T12:00:00" : ""))
+        if (isNaN(d.getTime())) return String(value)
+        return d.toLocaleDateString(Qt.locale(), Locale.LongFormat)
+    }
+
     function formatCountdown(totalSeconds) {
         if (totalSeconds <= 0) return root.showSeconds ? "00:00" : "0 min"
         var h  = Math.floor(totalSeconds / 3600)
@@ -490,12 +497,12 @@ PluginComponent {
     }
 
     function determinePrayerPeriod(nowStr, fajrT, dhuhrT, asrT, maghribT, ishaT) {
-        if (nowStr < fajrT)    return { currName: "Isha",    nextName: "Fajr",    nextTime: fajrT    }
-        if (nowStr < dhuhrT)   return { currName: "Fajr",    nextName: "Dhuhr",   nextTime: dhuhrT   }
-        if (nowStr < asrT)     return { currName: "Dhuhr",   nextName: "Asr",     nextTime: asrT     }
-        if (nowStr < maghribT) return { currName: "Asr",     nextName: "Maghrib", nextTime: maghribT }
-        if (nowStr < ishaT)    return { currName: "Maghrib", nextName: "Isha",    nextTime: ishaT    }
-        return                        { currName: "Isha",    nextName: "Fajr",    nextTime: fajrT    }
+        if (nowStr < fajrT)    return { currName: "Isha",    prevTime: ishaT,    nextName: "Fajr",    nextTime: fajrT    }
+        if (nowStr < dhuhrT)   return { currName: "Fajr",    prevTime: fajrT,    nextName: "Dhuhr",   nextTime: dhuhrT   }
+        if (nowStr < asrT)     return { currName: "Dhuhr",   prevTime: dhuhrT,   nextName: "Asr",     nextTime: asrT     }
+        if (nowStr < maghribT) return { currName: "Asr",     prevTime: asrT,     nextName: "Maghrib", nextTime: maghribT }
+        if (nowStr < ishaT)    return { currName: "Maghrib", prevTime: maghribT, nextName: "Isha",    nextTime: ishaT    }
+        return                        { currName: "Isha",    prevTime: ishaT,    nextName: "Fajr",    nextTime: fajrT    }
     }
 
     function refreshPrayerPeriod(nowStr) {
@@ -511,10 +518,27 @@ PluginComponent {
             root._wasAtTime = false
         }
         root.currName = period.currName
+        root.prevTime = period.prevTime
         root.nextName = period.nextName
         root.nextTime = period.nextTime
         root.nextTimeSec = timeToMinutes(period.nextTime) * 60
         return true
+    }
+
+    function updateProgress() {
+        if (!root.hasData || root.prevTime === "" || root.nextTimeSec <= 0) {
+            root.periodProgress = 0
+            return
+        }
+        var now = clock.date
+        var nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+        var prevSec = timeToMinutes(root.prevTime) * 60
+        var total = root.nextTimeSec - prevSec
+        if (total <= 0) total += 86400
+        var elapsed = nowSec - prevSec
+        if (elapsed < 0) elapsed += 86400
+        if (elapsed > total) elapsed = total
+        root.periodProgress = Math.max(0, Math.min(1, elapsed / total))
     }
 
     function processPrayerData(data) {
@@ -549,345 +573,459 @@ PluginComponent {
         return root.prayerIcons[name] || "mosque"
     }
 
-    // Horizontal bar pill
     horizontalBarPill: Component {
         Row {
-            spacing: root.iconOnly ? 0 : Theme.spacingXS
+            spacing: root.iconOnly ? 0 : Theme.spacingS
             rightPadding: root.iconOnly ? 0 : Theme.spacingS
+            Accessible.name: root.nextName !== ""
+                             ? root.nextName + " in " + root.formatCountdown(root.nextTotalSeconds)
+                             : "Prayer times"
 
-            DIcon {
-                name: root.getPrayerIcon(root.currName)
-                size: Theme.iconSizeSmall + Theme.spacingXXS
-                color: Theme.primary
+            Rectangle {
+                width: Theme.iconSizeSmall + Theme.spacingS
+                height: width
+                radius: width / 2
+                color: root.isUrgent ? Theme.withAlpha(Theme.error, 0.16) : root.accentBg
                 anchors.verticalCenter: parent.verticalCenter
+
+                DIcon {
+                    anchors.centerIn: parent
+                    name: root.getPrayerIcon(root.currName)
+                    size: Theme.iconSizeSmall
+                    color: root.isUrgent ? Theme.error : Theme.primary
+                }
             }
 
             StyledText {
                 visible: !root.iconOnly
-               // text: root.nextTime !== "" ? (root.nextName + " " + root.formatTime(root.nextTime)) : "Loading..."
-              text: root.nextTime !== "" ? root.nextName : "Loading..."
-               font.pixelSize: Theme.fontSizeSmall
-              color: Theme.secondary
-              anchors.verticalCenter: parent.verticalCenter
-            }
-
-            StyledText {
-                visible: !root.iconOnly && root.nextTime !== ""
-                text: "·"
+                text: root.nextTime !== "" ? root.nextName : "Loading…"
                 font.pixelSize: Theme.fontSizeSmall
-                color: Theme.surfaceVariantText
-                leftPadding: Theme.spacingXXS; rightPadding: Theme.spacingXXS
+                font.weight: Theme.fontWeightMedium
+                color: root.isUrgent ? Theme.error : Theme.surfaceText
                 anchors.verticalCenter: parent.verticalCenter
             }
 
-            StyledText {
+            NumericText {
                 visible: !root.iconOnly && root.nextTime !== ""
                 text: root.formatCountdown(root.nextTotalSeconds)
                 font.pixelSize: Theme.fontSizeSmall
-                font.weight: root.isUrgent ? Font.Bold : Font.Normal
-                color: root.isUrgent ? root.accentColor : Theme.secondary
+                font.weight: root.isUrgent ? Theme.fontWeightBold : Font.Normal
+                color: root.isUrgent ? Theme.error : Theme.secondary
                 anchors.verticalCenter: parent.verticalCenter
             }
         }
     }
 
-    // Vertical bar pill
     verticalBarPill: Component {
         Column {
             spacing: Theme.spacingXXS
 
-            DIcon {
-                name: root.getPrayerIcon(root.currName)
-                size: Theme.iconSizeSmall + Theme.spacingXXS
-                color: Theme.surfaceText
+            Rectangle {
+                width: Theme.iconSizeSmall + Theme.spacingS
+                height: width
+                radius: width / 2
+                color: root.isUrgent ? Theme.withAlpha(Theme.error, 0.16) : root.accentBg
                 anchors.horizontalCenter: parent.horizontalCenter
+
+                DIcon {
+                    anchors.centerIn: parent
+                    name: root.getPrayerIcon(root.currName)
+                    size: Theme.iconSizeSmall
+                    color: root.isUrgent ? Theme.error : Theme.primary
+                }
             }
 
-            StyledText {
+            NumericText {
                 visible: root.nextTime !== ""
                 text: root.formatCountdown(root.nextTotalSeconds)
                 font.pixelSize: Theme.fontSizeXSmall
-                color: root.isUrgent ? root.accentColor : Theme.surfaceText
+                color: root.isUrgent ? Theme.error : Theme.surfaceText
                 anchors.horizontalCenter: parent.horizontalCenter
             }
         }
     }
 
-    // Popout panel
     popoutContent: Component {
-        Item {
+        PopoutComponent {
             id: popoutRoot
             width: root.popoutWidth
-            implicitWidth: root.popoutWidth
-            implicitHeight: content.implicitHeight + Theme.spacingM * 2
+            headerText: "Prayer Times"
+            detailsText: root.dateGreg !== "" && root.dateHijr !== ""
+                         ? root.dateGreg + " · " + root.dateHijr
+                         : (root.dateGreg || root.dateHijr)
+            headerActions: Component {
+                DRefreshButton {
+                    busy: root.fetching
+                    tooltipText: "Refresh prayer times"
+                    onClicked: root.fetchPrayerTimes()
+                }
+            }
+
+            Item {
+                width: 1
+                height: Theme.spacingS
+            }
+
+            DButtonGroup {
+                width: parent.width
+                visible: root.quranEnabled
+                model: [
+                    { text: "Prayers", icon: "mosque" },
+                    { text: "Quran", icon: "menu_book" }
+                ]
+                currentIndex: root.showQuranPanel ? 1 : 0
+                size: "small"
+                fillWidth: true
+                checkEnabled: false
+                maximumWidth: parent.width
+                onSelectionChanged: function(index, selected) {
+                    if (selected)
+                        root.showQuranPanel = index === 1
+                }
+            }
 
             Column {
-                id: content
-                spacing: Theme.spacingS
-                anchors.fill: parent
-                anchors.margins: Theme.spacingM
+                width: parent.width
+                spacing: Theme.spacingM
+                visible: !root.showQuranPanel || !root.quranEnabled
 
-                Item {
+                DCard {
+                    id: heroCard
                     width: parent.width
-                    height: Math.max(dateCol.implicitHeight, refreshPill.height)
+                    height: heroContent.implicitHeight + heroCard.pad * 2
+                    pad: Theme.spacingL
+                    tone: "primary"
 
-                    Column {
-                        id: dateCol
-                        spacing: Theme.spacingXXS
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        StyledText {
-                            text: root.dateHijr
-                            font.pixelSize: Theme.fontSizeMedium
-                            font.weight: Font.Bold
-                            color: Theme.surfaceText
-                        }
-
-                        StyledText {
-                            text: root.dateGreg
-                            font.pixelSize: Theme.fontSizeSmall
-                            color: Theme.surfaceVariantText
-                        }
-                    }
-
-                    Rectangle {
-                        id: refreshPill
-                        width: root.compactControlSize; height: root.compactControlSize; radius: width / 2
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: refreshArea.containsMouse
-                               ? Qt.rgba(Theme.surfaceText.r, Theme.surfaceText.g, Theme.surfaceText.b, 0.12)
-                               : root.subtleBg
-
-                        DIcon {
-                            name: "refresh"
-                            size: Theme.iconSizeSmall + Theme.spacingXS
-                            color: Theme.surfaceVariantText
-                            anchors.centerIn: parent
-                        }
-
-                        MouseArea {
-                            id: refreshArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.fetchPrayerTimes()
-                        }
-                    }
-                }
-
-                // Tab switcher (only shown when the Quran panel is enabled)
-                Row {
-                    width: parent.width
-                    spacing: Theme.spacingXS
-                    visible: root.quranEnabled
-
-                    Rectangle {
-                        width: (parent.width - Theme.spacingXS) / 2
-                        height: root.compactControlSize
-                        radius: Theme.cornerRadiusS
-                        color: !root.showQuranPanel ? root.accentBg : root.subtleBg
-                        border.color: !root.showQuranPanel ? root.accentColor : "transparent"
-                        border.width: !root.showQuranPanel ? 1 : 0
-
-                        StyledText {
-                            anchors.centerIn: parent
-                            text: "Prayers"
-                            font.pixelSize: Theme.fontSizeSmall
-                            font.weight: !root.showQuranPanel ? Font.Bold : Font.Normal
-                            color: !root.showQuranPanel ? root.accentColor : Theme.surfaceVariantText
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.showQuranPanel = false
-                        }
-                    }
-
-                    Rectangle {
-                        width: (parent.width - Theme.spacingXS) / 2
-                        height: root.compactControlSize
-                        radius: Theme.cornerRadiusS
-                        color: root.showQuranPanel ? root.accentBg : root.subtleBg
-                        border.color: root.showQuranPanel ? root.accentColor : "transparent"
-                        border.width: root.showQuranPanel ? 1 : 0
-
-                        StyledText {
-                            anchors.centerIn: parent
-                            text: "Quran"
-                            font.pixelSize: Theme.fontSizeSmall
-                            font.weight: root.showQuranPanel ? Font.Bold : Font.Normal
-                            color: root.showQuranPanel ? root.accentColor : Theme.surfaceVariantText
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.showQuranPanel = true
-                        }
-                    }
-                }
-
-                // ── Prayers panel ──────────────────────────────────────────
-                Column {
-                    width: parent.width
-                    spacing: Theme.spacingS
-                    visible: !root.showQuranPanel || !root.quranEnabled
-
-                    // Countdown card
-                    Rectangle {
+                    RowLayout {
+                        id: heroContent
                         width: parent.width
-                        height: cdCol.implicitHeight + Theme.spacingM * 2
-                        radius: Theme.cornerRadiusS
-                        color: root.accentBg
-                        border.color: root.accentColor
-                        border.width: 1
+                        spacing: Theme.spacingL
 
                         Column {
-                            id: cdCol
-                            anchors.centerIn: parent
+                            Layout.fillWidth: true
                             spacing: Theme.spacingXS
 
-                            StyledText {
-                                text: root.nextName !== "" ? (root.nextName + "  in") : "..."
-                                font.pixelSize: Theme.fontSizeSmall
-                                color: Theme.surfaceVariantText
-                                anchors.horizontalCenter: parent.horizontalCenter
-                            }
+                            Row {
+                                spacing: Theme.spacingS
 
-                            StyledText {
-                                text: root.nextTime !== "" ? root.formatCountdown(root.nextTotalSeconds) : "..."
-                                font.pixelSize: Theme.fontSizeLarge
-                                font.weight: Font.Bold
-                                color: root.isUrgent ? root.accentColor : Theme.surfaceText
-                                anchors.horizontalCenter: parent.horizontalCenter
-                            }
-
-                            StyledText {
-                                text: root.nextTime !== "" ? ("at  " + root.formatTime(root.nextTime)) : ""
-                                font.pixelSize: Theme.fontSizeSmall
-                                color: Theme.surfaceVariantText
-                                anchors.horizontalCenter: parent.horizontalCenter
-                            }
-                        }
-                    }
-
-                    // Prayer times list
-                    Repeater {
-                        model: [
-                            { label: "Imsak",   time: root.imsak,   icon: "moon_stars" },
-                            { label: "Fajr",    time: root.fajr,    icon: "bedtime" },
-                            { label: "Sunrise", time: root.sunrise, icon: "wb_twilight" },
-                            { label: "Dhuhr",   time: root.dhuhr,   icon: "wb_sunny" },
-                            { label: "Asr",     time: root.asr,     icon: "light_mode" },
-                            { label: "Maghrib", time: root.maghrib, icon: "wb_twilight" },
-                            { label: "Isha",    time: root.isha,    icon: "bedtime" }
-                        ]
-
-                        delegate: Item {
-                            width: parent.width
-                            height: root.standardRowHeight
-
-                            readonly property bool isNext: modelData.label === root.nextName
-                            readonly property bool isCurr: modelData.label === root.currName
-
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.spacingS; anchors.rightMargin: Theme.spacingS
-                                anchors.topMargin: Theme.spacingXXS; anchors.bottomMargin: Theme.spacingXXS
-                                radius: height / 2
-                                color: isNext ? root.accentBg : (isCurr ? root.subtleBg : "transparent")
-                                border.color: isNext ? root.accentColor : "transparent"
-                                border.width: isNext ? 1 : 0
-                            }
-
-                            Item {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.spacingM; anchors.rightMargin: Theme.spacingM
-
-                                Row {
-                                    spacing: Theme.spacingS
-                                    anchors.left: parent.left
+                                DIcon {
+                                    name: root.getPrayerIcon(root.nextName)
+                                    size: Theme.iconSize
+                                    color: root.isUrgent ? Theme.error : heroCard.accentColor
                                     anchors.verticalCenter: parent.verticalCenter
-
-                                    DIcon {
-                                        name: modelData.icon
-                                        size: Theme.iconSize
-                                        color: isNext ? root.accentColor : (isCurr ? Theme.surfaceText : Theme.surfaceVariantText)
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-
-                                    StyledText {
-                                        text: modelData.label
-                                        font.pixelSize: Theme.fontSizeMedium
-                                        font.weight: (isNext || isCurr) ? Font.Bold : Font.Normal
-                                        color: isNext ? root.accentColor : (isCurr ? Theme.surfaceText : Theme.surfaceVariantText)
-                                        width: root.prayerLabelWidth
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
                                 }
 
                                 StyledText {
-                                    text: root.formatTime(modelData.time)
-                                    font.pixelSize: Theme.fontSizeMedium
-                                    font.weight: (isNext || isCurr) ? Font.Bold : Font.Normal
-                                    color: isNext ? root.accentColor : (isCurr ? Theme.surfaceText : Theme.surfaceVariantText)
-                                    anchors.right: parent.right
+                                    text: root.nextName !== "" ? "Next prayer" : "Prayer schedule"
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.weight: Theme.fontWeightMedium
+                                    color: heroCard.mutedColor
                                     anchors.verticalCenter: parent.verticalCenter
-                                    horizontalAlignment: Text.AlignRight
-                                    width: root.prayerTimeWidth
+                                }
+                            }
+
+                            StyledText {
+                                width: parent.width
+                                text: root.nextName !== "" ? root.nextName : (root.hasData ? "—" : "Set location")
+                                font.pixelSize: Theme.fontSizeXXLarge
+                                font.weight: Theme.fontWeightBold
+                                color: heroCard.contentColor
+                                elide: Text.ElideRight
+                            }
+
+                            StyledText {
+                                width: parent.width
+                                text: root.hasData
+                                      ? "at " + root.formatTime(root.nextTime)
+                                        + " · " + Math.round(root.periodProgress * 100) + "% of period"
+                                      : "Add coordinates or enable auto-location in settings"
+                                font.pixelSize: Theme.fontSizeSmall
+                                color: heroCard.mutedColor
+                                wrapMode: Text.WordWrap
+                            }
+
+                            StyledText {
+                                width: parent.width
+                                visible: root.currName !== ""
+                                text: "Current · " + root.currName
+                                font.pixelSize: Theme.fontSizeXSmall
+                                color: heroCard.mutedColor
+                            }
+                        }
+
+                        DRingGauge {
+                            Layout.preferredWidth: 104
+                            Layout.preferredHeight: 104
+                            value: root.hasData ? root.periodProgress : 0
+                            strokeWidth: Theme.spacingXS
+                            startAngle: -90
+                            ringColor: root.isUrgent ? Theme.error : heroCard.accentColor
+                            trackColor: Theme.withAlpha(heroCard.contentColor, 0.16)
+
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: 0
+
+                                NumericText {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: root.hasData ? root.formatCountdown(root.nextTotalSeconds) : "—"
+                                    font.pixelSize: Theme.fontSizeLarge
+                                    font.weight: Theme.fontWeightBold
+                                    color: root.isUrgent ? Theme.error : heroCard.contentColor
+                                }
+
+                                StyledText {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: root.hasData ? "remaining" : ""
+                                    font.pixelSize: Theme.fontSizeXSmall
+                                    color: heroCard.mutedColor
                                 }
                             }
                         }
                     }
                 }
 
-                // ── Quran panel ────────────────────────────────────────────
-                Column {
+                DCard {
+                    id: scheduleCard
                     width: parent.width
-                    spacing: Theme.spacingS
-                    visible: root.showQuranPanel && root.quranEnabled
+                    height: scheduleContent.implicitHeight + scheduleCard.pad * 2
+                    pad: Theme.spacingM
 
-                    StyledText {
+                    Column {
+                        id: scheduleContent
                         width: parent.width
-                        text: root.reciters.length > 0
-                              ? "Selected · " + root.reciters[root.selectedReciterIndex].name
-                                + " — " + root.reciters[root.selectedReciterIndex].moshaf_name
-                              : (root.fetchingReciters ? "Fetching reciters..."
-                                 : root.reciterStatus || "No reciter list loaded")
-                        font.pixelSize: Theme.fontSizeSmall
-                        font.weight: Font.Medium
-                        color: Theme.surfaceText
-                        elide: Text.ElideRight
-                    }
+                        spacing: Theme.spacingS
 
-                    DTextField {
-                        width: parent.width
-                        height: root.standardRowHeight
-                        placeholderText: root.reciters.length > 0
-                                ? "Search reciters or riwayah..."
-                                : "Reciter list is not available"
-                        enabled: root.reciters.length > 0
-                        text: root.reciterSearch
-                        onTextChanged: root.reciterSearch = text
-                    }
+                        RowLayout {
+                            width: parent.width
 
-                    StyledText {
-                        width: parent.width
-                        visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length === 0
-                        text: "No matching reciters"
-                        font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.surfaceVariantText
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: "Today's schedule"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Theme.fontWeightBold
+                                color: Theme.surfaceVariantText
+                            }
+
+                            StyledText {
+                                text: root.currName !== "" ? root.currName + " now" : ""
+                                font.pixelSize: Theme.fontSizeXSmall
+                                color: Theme.surfaceVariantText
+                            }
+                        }
+
+                        GridLayout {
+                            width: parent.width
+                            columns: 2
+                            columnSpacing: Theme.spacingS
+                            rowSpacing: Theme.spacingXS
+
+                            Repeater {
+                                model: [
+                                    { label: "Imsak",   time: root.imsak,   icon: "moon_stars" },
+                                    { label: "Fajr",    time: root.fajr,    icon: "bedtime" },
+                                    { label: "Sunrise", time: root.sunrise, icon: "wb_twilight" },
+                                    { label: "Dhuhr",   time: root.dhuhr,   icon: "wb_sunny" },
+                                    { label: "Asr",     time: root.asr,     icon: "light_mode" },
+                                    { label: "Maghrib", time: root.maghrib, icon: "wb_twilight" },
+                                    { label: "Isha",    time: root.isha,    icon: "bedtime" }
+                                ]
+
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: Theme.iconButtonSize
+                                    radius: Theme.cornerRadiusS
+                                    color: isNext ? Theme.withAlpha(Theme.primary, 0.14)
+                                                  : isCurr ? Theme.chipSurface
+                                                           : "transparent"
+                                    border.width: isNext ? Theme.outlineWidth : 0
+                                    border.color: isNext ? Theme.primary : "transparent"
+
+                                    readonly property bool isNext: modelData.label === root.nextName
+                                    readonly property bool isCurr: modelData.label === root.currName
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: Theme.spacingS
+                                        anchors.rightMargin: Theme.spacingS
+                                        spacing: Theme.spacingXS
+
+                                        DIcon {
+                                            Layout.preferredWidth: Theme.iconSizeSmall
+                                            Layout.preferredHeight: Theme.iconSizeSmall
+                                            name: modelData.icon
+                                            size: Theme.iconSizeSmall
+                                            color: isNext ? Theme.primary
+                                                          : isCurr ? Theme.surfaceText
+                                                                   : Theme.surfaceVariantText
+                                        }
+
+                                        StyledText {
+                                            Layout.fillWidth: true
+                                            text: modelData.label
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            font.weight: (isNext || isCurr) ? Theme.fontWeightBold : Font.Normal
+                                            color: isNext ? Theme.primary
+                                                          : isCurr ? Theme.surfaceText
+                                                                   : Theme.surfaceVariantText
+                                            elide: Text.ElideRight
+                                        }
+
+                                        StyledText {
+                                            text: root.formatTime(modelData.time)
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            font.weight: (isNext || isCurr) ? Theme.fontWeightBold : Font.Normal
+                                            color: isNext ? Theme.primary
+                                                          : isCurr ? Theme.surfaceText
+                                                                   : Theme.surfaceVariantText
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: Theme.spacingM
+                visible: root.showQuranPanel && root.quranEnabled
+
+                DCard {
+                    id: playingCard
+                    width: parent.width
+                    height: playingContent.implicitHeight + playingCard.pad * 2
+                    pad: Theme.spacingM
+                    tone: "secondary"
+                    visible: root.quranPlaying
+
+                    RowLayout {
+                        id: playingContent
+                        width: parent.width
+                        spacing: Theme.spacingM
+
+                        DIcon {
+                            Layout.preferredWidth: Theme.iconSize
+                            Layout.preferredHeight: Theme.iconSize
+                            name: "graphic_eq"
+                            size: Theme.iconSize
+                            color: playingCard.accentColor
+                        }
+
+                        Column {
+                            Layout.fillWidth: true
+                            spacing: 0
+
+                            StyledText {
+                                text: "Now playing"
+                                font.pixelSize: Theme.fontSizeXSmall
+                                color: playingCard.mutedColor
+                            }
+
+                            StyledText {
+                                width: parent.width
+                                text: root.playingSurah > 0
+                                      ? "Surah " + root.playingSurah + " · " + root.surahNames[root.playingSurah - 1]
+                                      : "Quran"
+                                font.pixelSize: Theme.fontSizeMedium
+                                font.weight: Theme.fontWeightMedium
+                                color: playingCard.contentColor
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        DButton {
+                            text: "Stop"
+                            iconName: "stop"
+                            buttonHeight: Theme.buttonHeightXS
+                            variant: "tonal"
+                            onClicked: root.stopQuran()
+                        }
+                    }
+                }
+
+                DCard {
+                    id: reciterCard
+                    width: parent.width
+                    height: reciterContent.implicitHeight + reciterCard.pad * 2
+                    pad: Theme.spacingM
+
+                    Column {
+                        id: reciterContent
+                        width: parent.width
+                        spacing: Theme.spacingS
+
+                        RowLayout {
+                            width: parent.width
+                            spacing: Theme.spacingM
+
+                            Column {
+                                Layout.fillWidth: true
+                                spacing: 0
+
+                                StyledText {
+                                    width: parent.width
+                                    text: root.reciters.length > 0
+                                          ? root.reciters[root.selectedReciterIndex].name
+                                          : (root.fetchingReciters ? "Loading reciters…"
+                                                                   : "Reciters")
+                                    font.pixelSize: Theme.fontSizeMedium
+                                    font.weight: Theme.fontWeightMedium
+                                    color: Theme.surfaceText
+                                    elide: Text.ElideRight
+                                }
+
+                                StyledText {
+                                    width: parent.width
+                                    text: root.reciters.length > 0
+                                          ? root.reciters[root.selectedReciterIndex].moshaf_name
+                                          : (root.reciterStatus || "Refresh to load the reciter list")
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.surfaceVariantText
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            DRefreshButton {
+                                busy: root.fetchingReciters
+                                tooltipText: "Refresh reciters"
+                                onClicked: root.fetchReciters()
+                            }
+                        }
+
+                        DSearchField {
+                            id: reciterSearchField
+                            width: parent.width
+                            placeholderText: root.reciters.length > 0
+                                             ? "Search reciters or riwayah…"
+                                             : "Reciter list is not available"
+                            enabled: root.reciters.length > 0
+                            text: root.reciterSearch
+                            onTextEdited: root.reciterSearch = text
+                        }
+
+                        StyledText {
+                            width: parent.width
+                            visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length === 0
+                            text: "No matching reciters"
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceVariantText
+                        }
+                    }
+                }
+
+                DCard {
+                    width: parent.width
+                    height: root.reciterListHeight + Theme.spacingM * 2
+                    pad: Theme.spacingM
+                    visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length > 0
 
                     DListView {
-                        width: parent.width
-                        height: root.reciterListHeight
-                        visible: root.reciterSearch.trim() !== "" && root.filteredReciters().length > 0
+                        anchors.fill: parent
                         clip: true
                         model: root.filteredReciters()
+                        spacing: Theme.spacingXS
 
                         delegate: Item {
                             width: ListView.view.width
@@ -895,26 +1033,31 @@ PluginComponent {
 
                             Rectangle {
                                 anchors.fill: parent
+                                anchors.leftMargin: Theme.spacingXS
+                                anchors.rightMargin: Theme.spacingXS
                                 radius: Theme.cornerRadiusS
-                                color: reciterResultMouse.containsMouse ? root.subtleBg : "transparent"
+                                color: reciterResultMouse.containsMouse
+                                       ? Theme.foregroundColor(Theme.chipSurface)
+                                       : "transparent"
                             }
 
                             Column {
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                anchors.leftMargin: Theme.spacingS
-                                anchors.rightMargin: Theme.spacingS
+                                anchors.leftMargin: Theme.spacingM
+                                anchors.rightMargin: Theme.spacingM
                                 spacing: Theme.spacingXXS
 
                                 StyledText {
                                     width: parent.width
                                     text: modelData.reciter.name
                                     font.pixelSize: Theme.fontSizeSmall
-                                    font.weight: Font.Medium
+                                    font.weight: Theme.fontWeightMedium
                                     color: Theme.surfaceText
                                     elide: Text.ElideRight
                                 }
+
                                 StyledText {
                                     width: parent.width
                                     text: modelData.reciter.moshaf_name
@@ -936,96 +1079,105 @@ PluginComponent {
                             }
                         }
                     }
+                }
 
-                    // Refresh row
-                    Item {
+                DCard {
+                    id: surahCard
+                    width: parent.width
+                    height: surahContent.implicitHeight + surahCard.pad * 2
+                    pad: Theme.spacingM
+
+                    Column {
+                        id: surahContent
                         width: parent.width
-                        height: Theme.spacingXL
+                        spacing: Theme.spacingS
 
-                        StyledText {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: root.reciters.length + " moshaf entries cached"
-                            font.pixelSize: Theme.fontSizeXSmall
-                            color: Theme.surfaceVariantText
-                        }
+                        RowLayout {
+                            width: parent.width
 
-                        Rectangle {
-                            anchors.right: parent.right
-                            width: Theme.spacingXL; height: Theme.spacingXL; radius: width / 2
-                            color: root.subtleBg
-
-                            DIcon {
-                                name: "refresh"
-                                size: Theme.iconSizeSmall
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: "Surah"
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Theme.fontWeightBold
                                 color: Theme.surfaceVariantText
-                                anchors.centerIn: parent
                             }
 
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.fetchReciters()
+                            StyledText {
+                                text: root.reciters.length > 0 ? root.reciters[root.selectedReciterIndex].name : ""
+                                font.pixelSize: Theme.fontSizeXSmall
+                                color: Theme.surfaceVariantText
+                                elide: Text.ElideRight
+                                Layout.maximumWidth: parent.width / 2
                             }
                         }
-                    }
 
-                    // Surah list
-                    DListView {
-                        width: parent.width
-                        height: root.surahListHeight
-                        clip: true
-                        model: 114
+                        DListView {
+                            width: parent.width
+                            height: root.surahListHeight
+                            clip: true
+                            model: 114
+                            spacing: Theme.spacingXXS
 
-                        delegate: Item {
-                            width: ListView.view.width
-                            height: Theme.iconSizeLarge
+                            delegate: Item {
+                                width: ListView.view.width
+                                height: root.standardRowHeight
 
-                            readonly property int surahNum: index + 1
-                            readonly property bool isPlaying: root.playingSurah === surahNum
+                                readonly property int surahNum: index + 1
+                                readonly property bool isPlaying: root.playingSurah === surahNum
 
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: Theme.cornerRadiusS
-                                color: isPlaying ? root.accentBg : "transparent"
-                            }
-
-                            Row {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.spacingS; anchors.rightMargin: Theme.spacingS
-                                spacing: Theme.spacingS
-
-                                StyledText {
-                                    width: root.surahNumberWidth
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: surahNum
-                                    font.pixelSize: Theme.fontSizeSmall
-                                    color: Theme.surfaceVariantText
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spacingXS
+                                    anchors.rightMargin: Theme.spacingXS
+                                    radius: Theme.cornerRadiusS
+                                    color: isPlaying ? Theme.withAlpha(Theme.primary, 0.14)
+                                                     : surahMouse.containsMouse
+                                                       ? Theme.foregroundColor(Theme.chipSurface)
+                                                       : "transparent"
                                 }
 
-                                StyledText {
-                                    width: parent.width - root.surahTextInset
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.surahNames[index]
-                                    font.pixelSize: Theme.fontSizeMedium
-                                    elide: Text.ElideRight
-                                    color: isPlaying ? root.accentColor : Theme.surfaceText
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spacingM
+                                    anchors.rightMargin: Theme.spacingM
+                                    spacing: Theme.spacingS
+
+                                    StyledText {
+                                        Layout.preferredWidth: root.surahNumberWidth
+                                        text: surahNum
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        color: isPlaying ? Theme.primary : Theme.surfaceVariantText
+                                    }
+
+                                    StyledText {
+                                        Layout.fillWidth: true
+                                        text: root.surahNames[index]
+                                        font.pixelSize: Theme.fontSizeMedium
+                                        color: isPlaying ? Theme.primary : Theme.surfaceText
+                                        elide: Text.ElideRight
+                                    }
+
+                                    DIcon {
+                                        Layout.preferredWidth: Theme.iconSizeSmall
+                                        Layout.preferredHeight: Theme.iconSizeSmall
+                                        name: isPlaying ? "stop" : "play_arrow"
+                                        size: Theme.iconSizeSmall
+                                        color: isPlaying ? Theme.primary : Theme.surfaceVariantText
+                                    }
                                 }
 
-                                DIcon {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    name: isPlaying ? "stop" : "play_arrow"
-                                    size: Theme.iconSizeSmall + Theme.spacingXS
-                                    color: isPlaying ? root.accentColor : Theme.surfaceVariantText
-                                }
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    if (isPlaying) root.stopQuran()
-                                    else root.playSurah(root.selectedReciterIndex, surahNum)
+                                MouseArea {
+                                    id: surahMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (isPlaying)
+                                            root.stopQuran()
+                                        else
+                                            root.playSurah(root.selectedReciterIndex, surahNum)
+                                    }
                                 }
                             }
                         }

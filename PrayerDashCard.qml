@@ -4,33 +4,36 @@
 // from mp3quran.net and is handled by the widget and Dashboard tab.
 
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Common
-import qs.Widgets
 import qs.DCommon.Widgets
 import qs.Modules.Plugins
+import qs.Modules.DDash
 import qs.Modules.DDash.Overview
 
 DashCardComponent {
     id: root
 
-    // ── Settings from pluginData/options (same keys as the bar widget) ───────
     readonly property bool use12H: options.use12H ?? false
 
-    // ── Prayer state ─────────────────────────────────────────────────────────
-    property string fajr:      ""
-    property string dhuhr:     ""
-    property string asr:       ""
-    property string maghrib:   ""
-    property string isha:      ""
-    property string currName:   ""
-    property string nextName:   ""
-    property string nextTime:   ""
-    property int    nextTimeSec:   0
-    property int    nextTotalSecs: 0
-    property string dateHijr:   ""
-    property bool   fetching:   false
+    property string fajr: ""
+    property string dhuhr: ""
+    property string asr: ""
+    property string maghrib: ""
+    property string isha: ""
+    property string currName: ""
+    property string nextName: ""
+    property string nextTime: ""
+    property string prevTime: ""
+    property int nextTimeSec: 0
+    property int nextTotalSecs: 0
+    property real periodProgress: 0
+    property string dateHijr: ""
+    property bool fetching: false
+    readonly property bool hasData: fajr !== "" && dhuhr !== "" && asr !== "" && maghrib !== "" && isha !== ""
+
     readonly property real notifyMinutes: {
         const raw = pluginData.notifyMinutes
         if (raw === undefined || raw === null || String(raw).trim() === "") return 15
@@ -38,7 +41,6 @@ DashCardComponent {
         return Number.isFinite(value) ? value : 15
     }
     property int notifyThresholdSec: notifyMinutes * 60
-
     readonly property bool isUrgent: nextTotalSecs > 0 && nextTotalSecs <= notifyThresholdSec
 
     readonly property string pluginDir: {
@@ -48,9 +50,9 @@ DashCardComponent {
     readonly property string cacheDir: Paths.strip(Paths.cache) + "/prayerTimesEnhanced"
     readonly property string cachePath: cacheDir + "/cache.json"
 
+    tone: options.tone ?? "primary"
     clickable: true
 
-    // ── Back-end: read cache on load ─────────────────────────────────────────
     Process {
         id: pyRunner
         onExited: function(code) {
@@ -69,12 +71,16 @@ DashCardComponent {
         onLoaded: {
             try {
                 const obj = JSON.parse(cacheView.text())
-                if (!obj.times) return
+                if (!Array.isArray(obj.times) || obj.times.length < 6) return
                 const t = obj.times
-                root.processPrayerData(
-                    { Fajr:t[0], Sunrise:t[1], Dhuhr:t[2], Asr:t[3], Maghrib:t[4], Isha:t[5] },
-                    obj.hijri || ""
-                )
+                root.processPrayerData({
+                    Fajr: t[0],
+                    Sunrise: t[1],
+                    Dhuhr: t[2],
+                    Asr: t[3],
+                    Maghrib: t[4],
+                    Isha: t[5]
+                }, obj.hijri || "")
             } catch(e) {}
         }
     }
@@ -83,11 +89,15 @@ DashCardComponent {
         id: clock
         enabled: root.live
         precision: SystemClock.Minutes
-        onDateChanged: { if (root.nextTimeSec > 0) root.updateCountdown() }
+        onDateChanged: {
+            if (root.nextTimeSec > 0) root.updateCountdown()
+        }
     }
 
     Timer {
-        interval: 3600000; repeat: true; running: root.live
+        interval: 3600000
+        repeat: true
+        running: root.live
         onTriggered: root.fetch()
     }
 
@@ -96,131 +106,237 @@ DashCardComponent {
         root.fetch()
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
     function fetch() {
         if (root.fetching) return
         const loc = pluginData.autoLocation === true
         if (!loc && (!pluginData.latitude || !pluginData.longitude || !pluginData.timeZoneOffset))
-            return cacheView.reload()  // at minimum try the existing cache
+            return cacheView.reload()
         root.fetching = true
         const args = ["python3", root.pluginDir + "get_times.py", root.cachePath]
         if (loc) args.push("auto")
-        else     args.push("manual", pluginData.latitude, pluginData.longitude, pluginData.timeZoneOffset)
+        else args.push("manual", pluginData.latitude, pluginData.longitude, pluginData.timeZoneOffset)
         pyRunner.command = args
         pyRunner.running = false
         pyRunner.running = true
     }
 
-    function stripTZ(s) { return s ? s.split(" ")[0] : "" }
-    function timeToMin(hhmm) {
-        const p = hhmm.split(":"); return parseInt(p[0]) * 60 + parseInt(p[1])
+    function stripTZ(s) {
+        return s ? String(s).split(" ")[0] : ""
     }
+
+    function timeToMin(hhmm) {
+        const p = String(hhmm).split(":")
+        return parseInt(p[0], 10) * 60 + parseInt(p[1], 10)
+    }
+
     function formatTime(t) {
         if (!t || t === "") return ""
         if (!root.use12H) return t
-        const p = t.split(":"); let h = parseInt(p[0])
-        const ampm = h >= 12 ? "PM" : "AM"; h = h % 12; if (h === 0) h = 12
+        const p = t.split(":")
+        if (p.length < 2) return t
+        let h = parseInt(p[0], 10)
+        const ampm = h >= 12 ? "PM" : "AM"
+        h = h % 12
+        if (h === 0) h = 12
         return h + ":" + p[1] + " " + ampm
     }
+
     function formatCountdown(secs) {
         if (secs <= 0) return "0 min"
-        const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60)
+        const h = Math.floor(secs / 3600)
+        const m = Math.floor((secs % 3600) / 60)
         const mm = (m < 10 ? "0" : "") + m
         return h > 0 ? h + ":" + mm : m + " min"
     }
+
     function getPrayerIcon(name) {
-        const m = { Fajr:"bedtime", Dhuhr:"wb_sunny", Asr:"light_mode", Maghrib:"wb_twilight", Isha:"bedtime" }
+        const m = {
+            Fajr: "bedtime",
+            Dhuhr: "wb_sunny",
+            Asr: "light_mode",
+            Maghrib: "wb_twilight",
+            Isha: "bedtime"
+        }
         return m[name] || "mosque"
     }
+
     function processPrayerData(timings, hijri) {
-        root.fajr    = stripTZ(timings.Fajr)
-        root.dhuhr   = stripTZ(timings.Dhuhr)
-        root.asr     = stripTZ(timings.Asr)
+        root.fajr = stripTZ(timings.Fajr)
+        root.dhuhr = stripTZ(timings.Dhuhr)
+        root.asr = stripTZ(timings.Asr)
         root.maghrib = stripTZ(timings.Maghrib)
-        root.isha    = stripTZ(timings.Isha)
+        root.isha = stripTZ(timings.Isha)
         root.dateHijr = hijri
-
-        refreshPeriod(Qt.formatTime(clock.date, "HH:mm"))
-        updateCountdown()
+        root.refreshPeriod(Qt.formatTime(clock.date, "HH:mm"))
+        root.updateCountdown()
     }
-    function refreshPeriod(now) {
-        if (!root.fajr || !root.dhuhr || !root.asr || !root.maghrib || !root.isha)
-            return false
-        let period
-        if      (now < root.fajr)    period = { currName:"Isha",    nextName:"Fajr",    nextTime:root.fajr    }
-        else if (now < root.dhuhr)   period = { currName:"Fajr",    nextName:"Dhuhr",   nextTime:root.dhuhr   }
-        else if (now < root.asr)     period = { currName:"Dhuhr",   nextName:"Asr",     nextTime:root.asr     }
-        else if (now < root.maghrib) period = { currName:"Asr",     nextName:"Maghrib", nextTime:root.maghrib }
-        else if (now < root.isha)    period = { currName:"Maghrib", nextName:"Isha",    nextTime:root.isha    }
-        else                         period = { currName:"Isha",    nextName:"Fajr",    nextTime:root.fajr    }
 
+    function refreshPeriod(now) {
+        if (!root.hasData) return false
+        let period
+        if (now < root.fajr) {
+            period = { currName: "Isha", prevTime: root.isha, nextName: "Fajr", nextTime: root.fajr }
+        } else if (now < root.dhuhr) {
+            period = { currName: "Fajr", prevTime: root.fajr, nextName: "Dhuhr", nextTime: root.dhuhr }
+        } else if (now < root.asr) {
+            period = { currName: "Dhuhr", prevTime: root.dhuhr, nextName: "Asr", nextTime: root.asr }
+        } else if (now < root.maghrib) {
+            period = { currName: "Asr", prevTime: root.asr, nextName: "Maghrib", nextTime: root.maghrib }
+        } else if (now < root.isha) {
+            period = { currName: "Maghrib", prevTime: root.maghrib, nextName: "Isha", nextTime: root.isha }
+        } else {
+            period = { currName: "Isha", prevTime: root.isha, nextName: "Fajr", nextTime: root.fajr }
+        }
         root.nextTimeSec = timeToMin(period.nextTime) * 60
-        root.currName    = period.currName
-        root.nextName    = period.nextName
-        root.nextTime    = period.nextTime
+        root.currName = period.currName
+        root.prevTime = period.prevTime
+        root.nextName = period.nextName
+        root.nextTime = period.nextTime
         return true
     }
-    function updateCountdown() {
-        const d   = clock.date
-        const now = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()
-        let diff  = root.nextTimeSec - now
 
-        // Advance immediately when a prayer has passed so the card never shows
-        // a stale ~24h countdown between hourly refreshes.
+    function updateProgress() {
+        if (!root.hasData || root.prevTime === "" || root.nextTimeSec <= 0) {
+            root.periodProgress = 0
+            return
+        }
+        const d = clock.date
+        const nowSec = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()
+        const prevSec = timeToMin(root.prevTime) * 60
+        let total = root.nextTimeSec - prevSec
+        if (total <= 0) total += 86400
+        let elapsed = nowSec - prevSec
+        if (elapsed < 0) elapsed += 86400
+        if (elapsed > total) elapsed = total
+        root.periodProgress = Math.max(0, Math.min(1, elapsed / total))
+    }
+
+    function updateCountdown() {
+        const d = clock.date
+        const nowSec = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()
+        let diff = root.nextTimeSec - nowSec
         if (root.nextTimeSec > 0 && diff <= 0) {
             if (refreshPeriod(Qt.formatTime(d, "HH:mm")))
-                diff = root.nextTimeSec - now
+                diff = root.nextTimeSec - nowSec
         }
         if (diff < 0) diff += 86400
         root.nextTotalSecs = Math.max(0, diff)
+        root.updateProgress()
     }
 
-    // ── Card content ──────────────────────────────────────────────────────────
-    Column {
-        anchors.centerIn: parent
-        spacing:          Theme.spacingS
+    Item {
+        anchors.fill: parent
 
-        // Prayer icon
-        DIcon {
-            anchors.horizontalCenter: parent.horizontalCenter
-            name:  root.getPrayerIcon(root.currName)
-            size:  Theme.iconSizeLarge
-            color: root.isUrgent ? Theme.error : root.accentColor
+        RowLayout {
+            id: topRow
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Theme.spacingS
+
+            Rectangle {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: Theme.iconSizeLarge
+                Layout.preferredHeight: Theme.iconSizeLarge
+                radius: width / 2
+                color: Theme.withAlpha(root.contentColor, 0.12)
+
+                DIcon {
+                    anchors.centerIn: parent
+                    name: root.getPrayerIcon(root.nextName)
+                    size: Theme.iconSize
+                    color: root.isUrgent ? Theme.error : root.accentColor
+                }
+            }
+
+            Column {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 0
+
+                StyledText {
+                    text: root.nextName !== "" ? "Next prayer" : "Prayer times"
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: root.mutedColor
+                }
+
+                StyledText {
+                    text: root.nextName !== "" ? root.nextName : (root.hasData ? "—" : "Not set")
+                    font.pixelSize: Theme.fontSizeLarge
+                    font.weight: Theme.fontWeightBold
+                    color: root.contentColor
+                }
+            }
+
+            StyledText {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.maximumWidth: 100
+                text: root.dateHijr
+                font.pixelSize: Theme.fontSizeXSmall
+                color: root.mutedColor
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignRight
+            }
         }
 
-        // Next prayer name
-        StyledText {
+        DRingGauge {
+            id: progressRing
             anchors.horizontalCenter: parent.horizontalCenter
-            text:            root.nextName !== "" ? root.nextName : "…"
-            font.pixelSize:  Theme.fontSizeMedium
-            font.weight:     Font.Medium
-            color:           root.contentColor
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(parent.width, parent.height - topRow.height - bottomRow.height - Theme.spacingL)
+            height: width
+            value: root.hasData ? root.periodProgress : 0
+            strokeWidth: Theme.spacingXS
+            startAngle: -90
+            ringColor: root.isUrgent ? Theme.error : root.accentColor
+            trackColor: Theme.withAlpha(root.contentColor, 0.16)
+            animated: true
+
+            Column {
+                anchors.centerIn: parent
+                spacing: 0
+
+                NumericText {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: root.hasData ? root.formatCountdown(root.nextTotalSecs) : "—"
+                    font.pixelSize: progressRing.width >= 92 ? Theme.fontSizeXLarge : Theme.fontSizeLarge
+                    font.weight: Theme.fontWeightBold
+                    color: root.isUrgent ? Theme.error : root.contentColor
+                }
+
+                StyledText {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: root.hasData ? root.nextName : "Open settings"
+                    font.pixelSize: Theme.fontSizeXSmall
+                    color: root.mutedColor
+                }
+            }
         }
 
-        // Countdown
-        StyledText {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text:            root.nextTime !== "" ? root.formatCountdown(root.nextTotalSecs) : "…"
-            font.pixelSize:  Theme.fontSizeXXLarge
-            font.weight:     Font.Bold
-            color:           root.isUrgent ? Theme.error : root.accentColor
-        }
+        RowLayout {
+            id: bottomRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            spacing: Theme.spacingS
 
-        // "at HH:MM" label
-        StyledText {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text:            root.nextTime !== "" ? ("at " + root.formatTime(root.nextTime)) : ""
-            font.pixelSize:  Theme.fontSizeSmall
-            color:           root.mutedColor
-        }
+            StyledText {
+                text: root.hasData ? ("at " + root.formatTime(root.nextTime)) : ""
+                font.pixelSize: Theme.fontSizeSmall
+                font.weight: Theme.fontWeightMedium
+                color: root.contentColor
+            }
 
-        // Hijri date
-        StyledText {
-            anchors.horizontalCenter: parent.horizontalCenter
-            visible:         root.dateHijr !== ""
-            text:            root.dateHijr
-            font.pixelSize:  Theme.fontSizeSmall
-            color:           root.mutedColor
+            Item { Layout.fillWidth: true }
+
+            StyledText {
+                Layout.maximumWidth: parent.width / 2
+                text: root.hasData && root.currName !== "" ? (root.currName + " now") : ""
+                font.pixelSize: Theme.fontSizeXSmall
+                color: root.mutedColor
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignRight
+            }
         }
     }
 }
