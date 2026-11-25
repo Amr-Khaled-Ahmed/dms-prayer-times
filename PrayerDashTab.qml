@@ -18,8 +18,23 @@ DashTabComponent {
     id: root
 
     // ── Shared plugin settings (same keys used by PrayerWidget) ──────────────
-    readonly property bool use12H:          options.use12H        ?? false
-    readonly property bool showQuranInDash: options.showQuranInDash ?? true
+    // Dashboard options explicitly saved from the dashboard editor win;
+    // otherwise fall back to the global plugin settings.
+    readonly property var storedDashOptions: DashRegistry.storedOptions(entryId)
+    readonly property bool use12H: storedDashOptions.use12H !== undefined
+                                   ? (options.use12H ?? false)
+                                   : (pluginData.use12H ?? false)
+    readonly property bool showQuranInDash: storedDashOptions.showQuranInDash !== undefined
+                                            ? (options.showQuranInDash ?? true)
+                                            : (pluginData.showQuranInDash ?? true)
+    readonly property bool showImsak: pluginData.showImsak ?? true
+    readonly property bool showSunrise: pluginData.showSunrise ?? true
+    readonly property string calcMethod: pluginData.calcMethod ?? "egypt"
+    readonly property string asrMethod: pluginData.asrMethod ?? "standard"
+    readonly property int hijriOffset: {
+        const value = Number(pluginData.hijriOffset)
+        return Number.isFinite(value) ? Math.round(value) : 0
+    }
 
     // Prayer time data — populated by the Python back-end via shared cache
     property string fajr:    ""
@@ -34,6 +49,14 @@ DashTabComponent {
     property string statusMessage: ""
     property bool   hasPrayerData: false
     property string reciterStatus: ""
+    readonly property bool statusIsError: {
+        const msg = root.statusMessage
+        return msg.indexOf("Could not") === 0
+                || msg.indexOf("Update failed") === 0
+                || msg.indexOf("Set your") === 0
+                || msg.indexOf("Add a valid") !== -1
+    }
+    readonly property color statusColor: root.statusIsError ? Theme.error : Theme.tertiary
 
     property string currName: ""
     property string nextName: ""
@@ -234,6 +257,9 @@ DashTabComponent {
         } else {
             args.push("manual", String(latitude), String(longitude), String(offset))
         }
+        args.push("--method", root.calcMethod)
+        args.push("--asr", root.asrMethod)
+        args.push("--hijri-offset", String(root.hijriOffset))
         pyRunner.command = args
         pyRunner.running = false
         pyRunner.running = true
@@ -365,6 +391,28 @@ DashTabComponent {
         const m = { Fajr:"bedtime", Dhuhr:"wb_sunny", Asr:"light_mode", Maghrib:"wb_twilight", Isha:"bedtime" }
         return m[name] || "mosque"
     }
+    function scheduleItems() {
+        const items = []
+        if (root.showImsak)
+            items.push({ label: "Imsak", time: root.imsak, icon: "moon_stars" })
+        items.push({ label: "Fajr", time: root.fajr, icon: "bedtime" })
+        if (root.showSunrise)
+            items.push({ label: "Sunrise", time: root.sunrise, icon: "wb_twilight" })
+        items.push({ label: "Dhuhr", time: root.dhuhr, icon: "wb_sunny" })
+        items.push({ label: "Asr", time: root.asr, icon: "light_mode" })
+        items.push({ label: "Maghrib", time: root.maghrib, icon: "wb_twilight" })
+        items.push({ label: "Isha", time: root.isha, icon: "bedtime" })
+        return items
+    }
+    function timelineItems() {
+        return [
+            { label: "Fajr", time: root.fajr, icon: "bedtime" },
+            { label: "Dhuhr", time: root.dhuhr, icon: "wb_sunny" },
+            { label: "Asr", time: root.asr, icon: "light_mode" },
+            { label: "Maghrib", time: root.maghrib, icon: "wb_twilight" },
+            { label: "Isha", time: root.isha, icon: "bedtime" }
+        ]
+    }
     function pad3(n) { let s = "" + n; while (s.length < 3) s = "0" + s; return s }
     function doFetchReciters() {
         if (root.fetchingReciters) return
@@ -422,6 +470,20 @@ DashTabComponent {
             width: parent.width
             spacing: Theme.spacingM
 
+            Rectangle {
+                Layout.preferredWidth: 46
+                Layout.preferredHeight: 46
+                radius: 23
+                color: Theme.withAlpha(Theme.primary, 0.14)
+
+                DIcon {
+                    anchors.centerIn: parent
+                    name: root.nextName !== "" ? root.getPrayerIcon(root.nextName) : "mosque"
+                    size: Theme.iconSizeLarge
+                    color: root.isUrgent ? Theme.error : Theme.primary
+                }
+            }
+
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
@@ -458,9 +520,9 @@ DashTabComponent {
             height: statusRow.implicitHeight + Theme.spacingS * 2
             radius: Theme.cornerRadiusM
             visible: root.statusMessage !== ""
-            color: Theme.withAlpha(Theme.error, 0.09)
+            color: Theme.withAlpha(root.statusColor, 0.09)
             border.width: Theme.outlineWidth
-            border.color: Theme.withAlpha(Theme.error, 0.24)
+            border.color: Theme.withAlpha(root.statusColor, 0.24)
 
             RowLayout {
                 id: statusRow
@@ -471,9 +533,9 @@ DashTabComponent {
                 DIcon {
                     Layout.preferredWidth: Theme.iconSizeSmall
                     Layout.preferredHeight: Theme.iconSizeSmall
-                    name: "info"
+                    name: root.statusIsError ? "error" : "info"
                     size: Theme.iconSizeSmall
-                    color: Theme.error
+                    color: root.statusColor
                 }
 
                 StyledText {
@@ -603,12 +665,168 @@ DashTabComponent {
             }
         }
 
+        // ── Prayer timeline ──────────────────────────────────────────────────
+        Card {
+            id: timelineCard
+            width: parent.width
+            height: timelineContent.implicitHeight + timelineCard.pad * 2
+            pad: Theme.spacingM
+            visible: root.hasPrayerData
+
+            ColumnLayout {
+                id: timelineContent
+                width: parent.width
+                spacing: Theme.spacingS
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: "Prayer flow"
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.weight: Theme.fontWeightBold
+                        color: Theme.surfaceVariantText
+                    }
+
+                    StyledText {
+                        text: root.nextName !== "" ? "Up next · " + root.nextName : ""
+                        font.pixelSize: Theme.fontSizeXSmall
+                        color: Theme.surfaceVariantText
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+
+                    Rectangle {
+                        x: parent.width * 0.1
+                        y: 17
+                        width: parent.width * 0.8
+                        height: 2
+                        radius: 1
+                        color: Theme.withAlpha(Theme.primary, 0.2)
+                    }
+
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: 0
+
+                        Repeater {
+                            model: root.timelineItems()
+
+                            delegate: ColumnLayout {
+                                id: timelineNode
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignTop
+                                spacing: Theme.spacingXXS
+
+                                readonly property bool isNext: modelData.label === root.nextName
+                                readonly property bool isCurr: modelData.label === root.currName
+
+                                Rectangle {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    width: 36
+                                    height: 36
+                                    radius: 18
+                                    color: timelineNode.isNext
+                                           ? Theme.primary
+                                           : timelineNode.isCurr
+                                             ? Theme.withAlpha(Theme.surfaceText, 0.12)
+                                             : Theme.withAlpha(Theme.surfaceText, 0.06)
+                                    border.width: timelineNode.isNext ? 2 : 0
+                                    border.color: Theme.primary
+
+                                    DIcon {
+                                        anchors.centerIn: parent
+                                        name: modelData.icon
+                                        size: Theme.iconSizeSmall
+                                        color: timelineNode.isNext
+                                               ? Theme.onPrimary
+                                               : timelineNode.isCurr
+                                                 ? Theme.surfaceText
+                                                 : Theme.surfaceVariantText
+                                    }
+                                }
+
+                                StyledText {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: modelData.label
+                                    font.pixelSize: Theme.fontSizeXSmall
+                                    font.weight: timelineNode.isNext ? Theme.fontWeightBold : Font.Normal
+                                    color: timelineNode.isNext
+                                           ? Theme.primary
+                                           : timelineNode.isCurr
+                                             ? Theme.surfaceText
+                                             : Theme.surfaceVariantText
+                                }
+
+                                StyledText {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: root.formatTime(modelData.time)
+                                    font.pixelSize: Theme.fontSizeXSmall
+                                    color: timelineNode.isNext ? Theme.primary : Theme.surfaceVariantText
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Empty state ──────────────────────────────────────────────────────
+        Card {
+            id: emptyCard
+            width: parent.width
+            height: emptyContent.implicitHeight + emptyCard.pad * 2
+            pad: Theme.spacingL
+            visible: !root.hasPrayerData
+
+            RowLayout {
+                id: emptyContent
+                width: parent.width
+                spacing: Theme.spacingM
+
+                DIcon {
+                    Layout.preferredWidth: Theme.iconSizeLarge
+                    Layout.preferredHeight: Theme.iconSizeLarge
+                    name: "location_off"
+                    size: Theme.iconSizeLarge
+                    color: Theme.surfaceVariantText
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacingXXS
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: root.fetching ? "Calculating prayer times…" : "Prayer times aren't set up yet"
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.weight: Theme.fontWeightBold
+                        color: Theme.surfaceText
+                        wrapMode: Text.WordWrap
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: "Open Settings → Plugins → Prayer Times Enhanced and add your coordinates, or enable Auto Detect Location."
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+        }
+
         // ── Prayer schedule ──────────────────────────────────────────────────
         Card {
             id: scheduleCard
             width: parent.width
             height: scheduleContent.implicitHeight + scheduleCard.pad * 2
             pad: Theme.spacingM
+            visible: root.hasPrayerData
 
             ColumnLayout {
                 id: scheduleContent
@@ -641,15 +859,7 @@ DashTabComponent {
                     rowSpacing: Theme.spacingXS
 
                     Repeater {
-                        model: [
-                            { label: "Imsak",   time: root.imsak,   icon: "moon_stars"  },
-                            { label: "Fajr",    time: root.fajr,    icon: "bedtime"     },
-                            { label: "Sunrise", time: root.sunrise, icon: "wb_twilight" },
-                            { label: "Dhuhr",   time: root.dhuhr,   icon: "wb_sunny"    },
-                            { label: "Asr",     time: root.asr,     icon: "light_mode"  },
-                            { label: "Maghrib", time: root.maghrib, icon: "wb_twilight" },
-                            { label: "Isha",    time: root.isha,    icon: "bedtime"     }
-                        ]
+                        model: root.scheduleItems()
 
                         delegate: Rectangle {
                             id: prayerRow

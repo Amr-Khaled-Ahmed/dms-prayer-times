@@ -42,7 +42,9 @@ PluginComponent {
     // Settings
     property bool iconOnly: pluginData.iconOnly ?? false
     property bool showSeconds: pluginData.showSeconds ?? false
-    property bool use12H: false
+    property bool use12H: pluginData.use12H ?? false
+    property bool showImsak: pluginData.showImsak ?? true
+    property bool showSunrise: pluginData.showSunrise ?? true
     readonly property real notifyMinutes: {
         const raw = pluginData.notifyMinutes
         if (raw === undefined || raw === null || String(raw).trim() === "") return 15
@@ -50,6 +52,7 @@ PluginComponent {
         return Number.isFinite(value) ? value : 15
     }
     property int notifyThresholdSec: notifyMinutes * 60
+    property bool remindersEnabled: pluginData.remindersEnabled ?? true
     property bool playAthanSound: pluginData.playAthanSound ?? false
     property string athanSoundPath: pluginData.athanSoundPath ?? ""
     property bool quranEnabled: pluginData.quranEnabled ?? true
@@ -57,6 +60,12 @@ PluginComponent {
     property string latitude: pluginData.latitude ?? ""
     property string longitude: pluginData.longitude ?? ""
     property string timeZoneOffset: pluginData.timeZoneOffset ?? ""
+    property string calcMethod: pluginData.calcMethod ?? "egypt"
+    property string asrMethod: pluginData.asrMethod ?? "standard"
+    readonly property int hijriOffset: {
+        const value = Number(pluginData.hijriOffset)
+        return Number.isFinite(value) ? Math.round(value) : 0
+    }
 
     // Resolved at runtime from wherever this plugin is actually installed —
     // never hardcode a path, so the plugin works on any machine/user.
@@ -139,6 +148,7 @@ PluginComponent {
     readonly property color accentColor: Theme.primary
     readonly property color accentBg: Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.18)
     popoutWidth: 380
+    pillRightClickAction: function() { root.fetchPrayerTimes() }
     readonly property int standardRowHeight: Theme.iconButtonSize
     readonly property int quranRowHeight: 48
     readonly property int reciterListHeight: 168
@@ -264,6 +274,9 @@ PluginComponent {
     onLatitudeChanged: if (!autoLocation) fetchPrayerTimes()
     onLongitudeChanged: if (!autoLocation) fetchPrayerTimes()
     onTimeZoneOffsetChanged: if (!autoLocation) fetchPrayerTimes()
+    onCalcMethodChanged: fetchPrayerTimes()
+    onAsrMethodChanged: fetchPrayerTimes()
+    onHijriOffsetChanged: fetchPrayerTimes()
 
     onShowQuranPanelChanged: {
         if (showQuranPanel && root.reciters.length === 0 && !root.fetchingReciters) {
@@ -315,6 +328,10 @@ PluginComponent {
             args.push(root.longitude)
             args.push(root.timeZoneOffset)
         }
+
+        args.push("--method", root.calcMethod)
+        args.push("--asr", root.asrMethod)
+        args.push("--hijri-offset", String(root.hijriOffset))
 
         root.fetching = true
         pyRunner.command = args
@@ -403,7 +420,7 @@ PluginComponent {
 
     // Notification functions
     function sendPrayerNotification() {
-        if (!root.isNotifyOwner) return
+        if (!root.isNotifyOwner || !root.remindersEnabled) return
         var mins = Math.ceil(root.nextTotalSeconds / 60)
         prayerNotifyProc.command = [
             "dms", "notify", "-a", "Prayer Times Enhanced", "-u", "critical", "-i", iconPath,
@@ -414,11 +431,13 @@ PluginComponent {
 
     function sendPrayerTimeNotification() {
         if (!root.isNotifyOwner) return
-        prayerNotifyProc.command = [
-            "dms", "notify", "-a", "Prayer Times Enhanced", "-u", "critical", "-i", iconPath,
-            "Time for " + root.nextName
-        ]
-        prayerNotifyProc.running = true
+        if (root.remindersEnabled) {
+            prayerNotifyProc.command = [
+                "dms", "notify", "-a", "Prayer Times Enhanced", "-u", "critical", "-i", iconPath,
+                "Time for " + root.nextName
+            ]
+            prayerNotifyProc.running = true
+        }
         root.playAthan()
     }
 
@@ -444,9 +463,13 @@ PluginComponent {
         root.nextTotalSeconds = Math.max(0, diff)
         root.updateProgress()
 
-        var urgent = diff > 0 && diff <= root.notifyThresholdSec
-        if (urgent && !root._wasUrgent) sendPrayerNotification()
-        root._wasUrgent = urgent
+        if (root.remindersEnabled) {
+            var urgent = diff > 0 && diff <= root.notifyThresholdSec
+            if (urgent && !root._wasUrgent) sendPrayerNotification()
+            root._wasUrgent = urgent
+        } else {
+            root._wasUrgent = false
+        }
     }
 
     // Utility functions
@@ -573,6 +596,54 @@ PluginComponent {
         return root.prayerIcons[name] || "mosque"
     }
 
+    function scheduleItems() {
+        const items = []
+        if (root.showImsak)
+            items.push({ label: "Imsak", time: root.imsak, icon: "moon_stars" })
+        items.push({ label: "Fajr", time: root.fajr, icon: "bedtime" })
+        if (root.showSunrise)
+            items.push({ label: "Sunrise", time: root.sunrise, icon: "wb_twilight" })
+        items.push({ label: "Dhuhr", time: root.dhuhr, icon: "wb_sunny" })
+        items.push({ label: "Asr", time: root.asr, icon: "light_mode" })
+        items.push({ label: "Maghrib", time: root.maghrib, icon: "wb_twilight" })
+        items.push({ label: "Isha", time: root.isha, icon: "bedtime" })
+        return items
+    }
+
+    component PrayerBadge: Item {
+        id: badge
+        property string iconName: "mosque"
+        property bool urgent: false
+        property real progress: -1
+        property color badgeColor: Theme.primary
+        property color badgeFill: Theme.withAlpha(Theme.primary, 0.18)
+
+        width: Theme.iconSizeSmall + Theme.spacingS
+        height: width
+
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            color: badge.urgent ? Theme.withAlpha(Theme.error, 0.16) : badge.badgeFill
+        }
+
+        DRingGauge {
+            anchors.fill: parent
+            value: badge.progress
+            strokeWidth: 2
+            startAngle: -90
+            ringColor: badge.urgent ? Theme.error : badge.badgeColor
+            trackColor: "transparent"
+
+            DIcon {
+                anchors.centerIn: parent
+                name: badge.iconName
+                size: Theme.iconSizeSmall - 2
+                color: badge.urgent ? Theme.error : badge.badgeColor
+            }
+        }
+    }
+
     horizontalBarPill: Component {
         Row {
             spacing: root.iconOnly ? 0 : Theme.spacingS
@@ -581,24 +652,17 @@ PluginComponent {
                              ? root.nextName + " in " + root.formatCountdown(root.nextTotalSeconds)
                              : "Prayer times"
 
-            Rectangle {
-                width: Theme.iconSizeSmall + Theme.spacingS
-                height: width
-                radius: width / 2
-                color: root.isUrgent ? Theme.withAlpha(Theme.error, 0.16) : root.accentBg
+            PrayerBadge {
                 anchors.verticalCenter: parent.verticalCenter
-
-                DIcon {
-                    anchors.centerIn: parent
-                    name: root.getPrayerIcon(root.currName)
-                    size: Theme.iconSizeSmall
-                    color: root.isUrgent ? Theme.error : Theme.primary
-                }
+                iconName: root.getPrayerIcon(root.currName)
+                urgent: root.isUrgent
+                progress: root.hasData ? root.periodProgress : -1
             }
 
             StyledText {
                 visible: !root.iconOnly
-                text: root.nextTime !== "" ? root.nextName : "Loading…"
+                text: root.nextTime !== "" ? root.nextName
+                                           : (root.fetching ? "Loading…" : "Set location")
                 font.pixelSize: Theme.fontSizeSmall
                 font.weight: Theme.fontWeightMedium
                 color: root.isUrgent ? Theme.error : Theme.surfaceText
@@ -620,19 +684,11 @@ PluginComponent {
         Column {
             spacing: Theme.spacingXXS
 
-            Rectangle {
-                width: Theme.iconSizeSmall + Theme.spacingS
-                height: width
-                radius: width / 2
-                color: root.isUrgent ? Theme.withAlpha(Theme.error, 0.16) : root.accentBg
+            PrayerBadge {
                 anchors.horizontalCenter: parent.horizontalCenter
-
-                DIcon {
-                    anchors.centerIn: parent
-                    name: root.getPrayerIcon(root.currName)
-                    size: Theme.iconSizeSmall
-                    color: root.isUrgent ? Theme.error : Theme.primary
-                }
+                iconName: root.getPrayerIcon(root.currName)
+                urgent: root.isUrgent
+                progress: root.hasData ? root.periodProgress : -1
             }
 
             NumericText {
@@ -786,10 +842,55 @@ PluginComponent {
                 }
 
                 DCard {
+                    id: emptyCard
+                    width: parent.width
+                    height: emptyContent.implicitHeight + emptyCard.pad * 2
+                    pad: Theme.spacingL
+                    visible: !root.hasData
+
+                    Column {
+                        id: emptyContent
+                        width: parent.width
+                        spacing: Theme.spacingS
+
+                        RowLayout {
+                            width: parent.width
+                            spacing: Theme.spacingS
+
+                            DIcon {
+                                Layout.preferredWidth: Theme.iconSize
+                                Layout.preferredHeight: Theme.iconSize
+                                name: "location_off"
+                                size: Theme.iconSize
+                                color: Theme.surfaceVariantText
+                            }
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: "Prayer times aren't set up yet"
+                                font.pixelSize: Theme.fontSizeMedium
+                                font.weight: Theme.fontWeightBold
+                                color: Theme.surfaceText
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+
+                        StyledText {
+                            width: parent.width
+                            text: "Open Settings → Plugins → Prayer Times Enhanced and add your coordinates, or enable Auto Detect Location."
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceVariantText
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
+                DCard {
                     id: scheduleCard
                     width: parent.width
                     height: scheduleContent.implicitHeight + scheduleCard.pad * 2
                     pad: Theme.spacingM
+                    visible: root.hasData
 
                     Column {
                         id: scheduleContent
@@ -821,15 +922,7 @@ PluginComponent {
                             rowSpacing: Theme.spacingXS
 
                             Repeater {
-                                model: [
-                                    { label: "Imsak",   time: root.imsak,   icon: "moon_stars" },
-                                    { label: "Fajr",    time: root.fajr,    icon: "bedtime" },
-                                    { label: "Sunrise", time: root.sunrise, icon: "wb_twilight" },
-                                    { label: "Dhuhr",   time: root.dhuhr,   icon: "wb_sunny" },
-                                    { label: "Asr",     time: root.asr,     icon: "light_mode" },
-                                    { label: "Maghrib", time: root.maghrib, icon: "wb_twilight" },
-                                    { label: "Isha",    time: root.isha,    icon: "bedtime" }
-                                ]
+                                model: root.scheduleItems()
 
                                 delegate: Rectangle {
                                     Layout.fillWidth: true

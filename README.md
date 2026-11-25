@@ -25,7 +25,7 @@ Prayer times are calculated locally on your machine. Manual coordinates work wit
 
 **Prayer Times Enhanced** is a composite DMS plugin (Dankbar widget + Dashboard tab + Dashboard card) that keeps the next prayer visible at a glance and provides a complete daily schedule when you need more detail.
 
-- Prayer times are calculated locally with the [`salat`](https://pypi.org/project/salat/) Python library using the **Egyptian General Authority** method and standard Asr calculation.
+- Prayer times are calculated locally with the [`salat`](https://pypi.org/project/salat/) Python library. The default is the **Egyptian General Authority** method with standard Asr; seven calculation methods and both standard/Hanafi Asr are available in settings.
 - The Hijri date is calculated offline using the Kuwaiti algorithm.
 - The bar widget shows the current/next prayer and a live countdown.
 - The Dashboard tab shows the daily schedule, next-prayer countdown, and an optional Quran section.
@@ -39,19 +39,22 @@ Prayer times are calculated locally on your machine. Manual coordinates work wit
 ### Dankbar Widget
 
 - Current or next prayer name with a live countdown directly in the top bar.
+- Circular progress ring around the prayer icon showing how far you are through the current period.
 - Popout schedule covering Imsak (10 minutes before Fajr), Fajr, Sunrise, Dhuhr, Asr, Maghrib, and Isha.
 - Hijri and Gregorian date display.
 - Optional icon-only mode and optional seconds in the countdown.
 - Optional pre-prayer reminders and prayer-time desktop notifications.
-- Optional Athan playback from a local audio file or direct URL.
+- Optional Athan playback from a local audio file or direct URL, with a test button in settings.
 
 ### Dashboard Tab & Card
 
 - Dedicated **Prayer Times Enhanced** Dashboard tab registered as `plugin_prayerTimesEnhanced`.
 - Full interactive daily schedule with the next prayer highlighted.
+- A horizontal prayer-flow timeline that shows where you are in the day at a glance.
 - Dashboard overview card showing the current period and countdown; clicking it opens the Prayer Times Enhanced tab.
 - Responsive layout that works in the regular Dashboard and in Island mode on supported DMS builds.
 - Keyboard-friendly navigation and a manual refresh action.
+- Clear empty states when coordinates have not been configured yet.
 
 ### Quran Recitation Browser & Player
 
@@ -67,20 +70,26 @@ Configure everything from **Settings → Plugins → Prayer Times Enhanced** and
 
 | Setting | Description | Default |
 |---|---|---|
-| 12-hour format | Display Dashboard prayer times in 12-hour format | Off |
-| Show Quran section | Show or hide the Quran section in the Prayer Times Enhanced Dashboard tab | On |
+| 12-Hour Clock | Display times as 1:30 PM instead of 13:30 everywhere | Off |
 | Icon Only Mode | Show only the prayer icon in the bar | Off |
-| Show Seconds | Show seconds in the countdown timer | Off |
+| Show Seconds in Countdown | Show seconds in the bar countdown | Off |
+| Show Imsak | Display Imsak (10 minutes before Fajr) in schedules | On |
+| Show Sunrise | Display Sunrise in schedules | On |
 | Auto Detect Location | Resolve approximate coordinates via IP-based geolocation | Off |
 | Latitude | Manual latitude in decimal degrees (-90 to 90) | Empty |
 | Longitude | Manual longitude in decimal degrees (-180 to 180) | Empty |
 | UTC Offset | Manual UTC offset in hours (-14 to +14, fractional supported) | Empty |
-| Reminder (minutes) | Minutes before prayer to send a notification | 15 |
+| Calculation Method | Egyptian, Muslim World League, Umm al-Qura, Karachi, ISNA, Tehran, or Jafari | Egyptian |
+| Asr Calculation | Standard (Shafi'i, Maliki, Hanbali) or Hanafi | Standard |
+| Hijri Date Offset | Shift the displayed Hijri date by -2 to +2 days | 0 |
+| Prayer Reminders | Send a reminder before each prayer and at prayer time | On |
+| Reminder Lead Time | Minutes before prayer to send the reminder (0–120) | 15 |
 | Play Athan Sound | Play an audio file when each prayer time starts | Off |
-| Athan Sound | Local `.mp3`/`.ogg`/`.wav` path or direct `http(s)` URL | Empty |
+| Athan Sound | Local `.mp3`/`.ogg`/`.wav` path, direct `http(s)` URL, or a file under `assets/` | Empty |
 | Show Quran Tab in Popout | Add the Quran browser/player tab to the widget popout | On |
+| Show Quran Section in Dashboard | Show the reciter browser and surah list in the Dashboard tab | On |
 
-> Manual location fields are blank on a fresh install. Set latitude, longitude, and UTC offset before relying on new calculations, or enable **Auto Detect Location**.
+> Manual location fields are blank on a fresh install. Set latitude, longitude, and UTC offset before relying on new calculations, or enable **Auto Detect Location**. The Athan card includes a **Test Sound** button so you can verify playback before prayer time.
 
 ---
 
@@ -91,6 +100,7 @@ Configure everything from **Settings → Plugins → Prayer Times Enhanced** and
 - Dank Material Shell **>= 2.0.0** (required for the DCommon and Dashboard APIs used here)
 - Python 3
 - `salat` Python library
+- `hijri-converter` (optional; required for exact Umm al-Qura Isha times during Ramadan)
 - Dank Material Shell notifications via the built-in `dms notify` command
 - One of `mpv`, `ffplay` (from `ffmpeg`), or `cvlc` (from VLC) for Athan and Quran audio
 - Internet access only for auto-location, reciter-list fetching, and audio streaming
@@ -99,6 +109,9 @@ Install the Python dependency and an audio player:
 
 ```bash
 pip install salat
+
+# Optional: exact Umm al-Qura Ramadan times
+pip install hijri-converter
 
 # Arch Linux
 sudo pacman -S mpv
@@ -149,11 +162,12 @@ hl.bind(
 
 ## How It Works
 
-1. On startup, on location changes, and hourly, the plugin runs `get_times.py`.
+1. On startup, on location or calculation changes, and hourly, the plugin runs `get_times.py`.
 2. In **manual** mode it uses your saved latitude, longitude, and UTC offset and calculates offline.
 3. In **auto** mode it resolves approximate coordinates through `ip-api.com`, then calculates locally.
-4. Results are written to `~/.cache/dms/prayerTimesEnhanced/cache.json` and rendered immediately by the widget and Dashboard.
-5. The Quran panel fetches the reciter list from mp3quran.net and caches it in `~/.cache/dms/prayerTimesEnhanced/reciters.json`.
+4. The selected calculation method, Asr convention, and Hijri offset are passed to the calculator.
+5. Results are written to `~/.cache/dms/prayerTimesEnhanced/cache.json` and rendered immediately by the widget and Dashboard.
+6. The Quran panel fetches the reciter list from mp3quran.net and caches it in `~/.cache/dms/prayerTimesEnhanced/reciters.json`.
 
 Cached schedules, reciter lists, and `__pycache__/` are generated locally and excluded from Git. Your personal Athan recording in `assets/athan.mp3` is also excluded by default so unlicensed audio is not published accidentally.
 

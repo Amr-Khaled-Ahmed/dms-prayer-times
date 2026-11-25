@@ -2,8 +2,13 @@
 Calculates today's prayer times and writes them to cache.json.
 
 Usage:
-    python3 get_times.py <cache_path> auto
-    python3 get_times.py <cache_path> manual <lat> <lon> <utc_offset_hours>
+    python3 get_times.py <cache_path> auto [options]
+    python3 get_times.py <cache_path> manual <lat> <lon> <utc_offset_hours> [options]
+
+Options:
+    --method <egypt|mwl|makkah|karachi|isna|tehran|jafari>
+    --asr <standard|hanafi>
+    --hijri-offset <days>
 
 "auto" mode resolves the machine's approximate location via IP-based
 geolocation (no local config needed, nothing hardcoded). "manual" mode
@@ -25,6 +30,66 @@ except ImportError:
     ZoneInfo = None
 
 IP_GEOLOCATION_URL = "http://ip-api.com/json/?fields=status,message,lat,lon,timezone"
+
+# Human-friendly keys used by the plugin settings mapped to salat enums.
+CALCULATION_METHODS = {
+    "egypt": salat.CalculationMethod.EGYPT,
+    "mwl": salat.CalculationMethod.MWL,
+    "makkah": salat.CalculationMethod.MAKKAH,
+    "karachi": salat.CalculationMethod.KARACHI,
+    "isna": salat.CalculationMethod.ISNA,
+    "tehran": salat.CalculationMethod.TEHRAN,
+    "jafari": salat.CalculationMethod.JAFARI,
+}
+
+ASR_METHODS = {
+    "standard": salat.AsrMethod.STANDARD,
+    "hanafi": salat.AsrMethod.HANAFI,
+}
+
+DEFAULT_OPTIONS = {
+    "method": "egypt",
+    "asr": "standard",
+    "hijri_offset": 0,
+}
+
+
+def parse_options(argv):
+    """Split trailing --options from positional arguments.
+
+    Returns (positional, options). Options may use "--name value" or
+    "--name=value" form and can appear in any order after the mode.
+    """
+    positional = []
+    options = dict(DEFAULT_OPTIONS)
+    index = 0
+
+    while index < len(argv):
+        token = argv[index]
+        if token.startswith("--"):
+            name = token[2:]
+            value = None
+            if "=" in name:
+                name, value = name.split("=", 1)
+            if value is None:
+                if index + 1 >= len(argv):
+                    raise ValueError(f"missing value for --{name}")
+                index += 1
+                value = argv[index]
+
+            if name == "method":
+                options["method"] = value
+            elif name == "asr":
+                options["asr"] = value
+            elif name == "hijri-offset":
+                options["hijri_offset"] = int(float(value))
+            else:
+                raise ValueError(f"unknown option --{name}")
+        else:
+            positional.append(token)
+        index += 1
+
+    return positional, options
 
 
 def geolocate_by_ip():
@@ -97,12 +162,18 @@ HIJRI_MONTHS_AR = [
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("error: usage: get_times.py <cache_path> auto|manual [lat lon utc_offset]")
+    try:
+        positional, options = parse_options(sys.argv[1:])
+    except ValueError as e:
+        print(f"error: {e}")
         sys.exit(1)
 
-    cache_path = sys.argv[1]
-    mode = sys.argv[2]
+    if len(positional) < 2:
+        print("error: usage: get_times.py <cache_path> auto|manual [lat lon utc_offset] [options]")
+        sys.exit(1)
+
+    cache_path = positional[0]
+    mode = positional[1]
 
     if mode == "auto":
         try:
@@ -112,13 +183,13 @@ def main():
                   f"or switch to manual coordinates in settings")
             sys.exit(1)
     elif mode == "manual":
-        if len(sys.argv) < 6:
+        if len(positional) < 5:
             print("error: manual mode requires <lat> <lon> <utc_offset>")
             sys.exit(1)
         try:
-            lat = float(sys.argv[3])
-            lon = float(sys.argv[4])
-            tz_offset = float(sys.argv[5])
+            lat = float(positional[2])
+            lon = float(positional[3])
+            tz_offset = float(positional[4])
         except ValueError:
             print("error: latitude, longitude, and UTC offset must be numeric")
             sys.exit(1)
@@ -126,13 +197,38 @@ def main():
         print(f"error: unknown mode '{mode}' (expected 'auto' or 'manual')")
         sys.exit(1)
 
+    method_key = str(options["method"]).lower()
+    asr_key = str(options["asr"]).lower()
+    calc_method = CALCULATION_METHODS.get(method_key, salat.CalculationMethod.EGYPT)
+    asr_method = ASR_METHODS.get(asr_key, salat.AsrMethod.STANDARD)
+
     tz = timezone(timedelta(hours=tz_offset))
     date = datetime.date.today()
 
-    pt = salat.PrayerTimes(salat.CalculationMethod.EGYPT, salat.AsrMethod.STANDARD)
-    times = pt.calc_times(date, tz, lon, lat)
+    makkah_fallback = False
+    try:
+        pt = salat.PrayerTimes(calc_method, asr_method)
+    except ImportError:
+        # The Umm al-Qura method needs the optional hijri-converter package
+        # for its Ramadan Isha adjustment. Keep working with a close
+        # approximation instead of failing the whole refresh.
+        if method_key != "makkah":
+            raise
+        from salat.methods import GeneralMethod
 
-    h_year, h_month, h_day = gregorian_to_hijri(date.year, date.month, date.day)
+        print("warning: install hijri-converter for exact Umm al-Qura times; "
+              "using a 90-minute Isha approximation")
+        pt = GeneralMethod(18.5, 18.5, asr_method)
+        makkah_fallback = True
+
+    times = pt.calc_times(date, tz, lon, lat)
+    if makkah_fallback:
+        times["isha"] = times["maghrib"] + timedelta(minutes=90)
+
+    hijri_date = date + timedelta(days=options["hijri_offset"])
+    h_year, h_month, h_day = gregorian_to_hijri(
+        hijri_date.year, hijri_date.month, hijri_date.day
+    )
     hijri_str = f"{h_day} {HIJRI_MONTHS_AR[h_month]} {h_year}"
 
     imsak = (times["fajr"] - timedelta(minutes=10)).strftime("%H:%M")
@@ -150,6 +246,9 @@ def main():
         "imsak": imsak,
         "hijri": hijri_str,
         "date": str(date),
+        "method": method_key,
+        "asr": asr_key,
+        "hijri_offset": options["hijri_offset"],
     }
 
     os.makedirs(os.path.dirname(os.path.abspath(cache_path)), exist_ok=True)

@@ -16,7 +16,16 @@ import qs.Modules.DDash.Overview
 DashCardComponent {
     id: root
 
-    readonly property bool use12H: options.use12H ?? false
+    readonly property var storedDashOptions: DashRegistry.storedOptions(entryId)
+    readonly property bool use12H: storedDashOptions.use12H !== undefined
+                                   ? (options.use12H ?? false)
+                                   : (pluginData.use12H ?? false)
+    readonly property string calcMethod: pluginData.calcMethod ?? "egypt"
+    readonly property string asrMethod: pluginData.asrMethod ?? "standard"
+    readonly property int hijriOffset: {
+        const value = Number(pluginData.hijriOffset)
+        return Number.isFinite(value) ? Math.round(value) : 0
+    }
 
     property string fajr: ""
     property string dhuhr: ""
@@ -106,6 +115,8 @@ DashCardComponent {
         root.fetch()
     }
 
+    onPluginDataChanged: Qt.callLater(root.fetch)
+
     function fetch() {
         if (root.fetching) return
         const loc = pluginData.autoLocation === true
@@ -115,6 +126,9 @@ DashCardComponent {
         const args = ["python3", root.pluginDir + "get_times.py", root.cachePath]
         if (loc) args.push("auto")
         else args.push("manual", pluginData.latitude, pluginData.longitude, pluginData.timeZoneOffset)
+        args.push("--method", root.calcMethod)
+        args.push("--asr", root.asrMethod)
+        args.push("--hijri-offset", String(root.hijriOffset))
         pyRunner.command = args
         pyRunner.running = false
         pyRunner.running = true
